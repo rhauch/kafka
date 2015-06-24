@@ -1,0 +1,17 @@
+target/
+log/
+
+.idea
+*.iml
+*.iws
+
+.svn
+.classpath
+.project
+.settings/
+
+*~
+*#
+.#*
+TAGS
+.DS_Store
