@@ -12,13 +12,13 @@ import java.util.Map;
 /**
  * Created by yasuhiro on 6/23/15.
  */
-public class StreamSynchronizer<K, V> {
+public class StreamSynchronizer implements SyncGroup {
 
   public final String name;
   private final Ingestor ingestor;
-  private final Chooser<K, V> chooser;
-  private final TimestampExtractor<K, V> timestampExtractor;
-  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<TopicPartition, RecordQueue<K, V>>();
+  private final Chooser chooser;
+  private final TimestampExtractor timestampExtractor;
+  private final Map<TopicPartition, RecordQueue> stash = new HashMap<>();
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
@@ -29,24 +29,29 @@ public class StreamSynchronizer<K, V> {
 
   StreamSynchronizer(String name,
                      Ingestor ingestor,
-                     Chooser<K, V> chooser,
-                     TimestampExtractor<K, V> timestampExtractor,
+                     Chooser chooser,
+                     TimestampExtractor timestampExtractor,
                      int desiredUnprocessedPerPartition) {
     this.name = name;
     this.ingestor = ingestor;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredUnprocessedPerPartition;
-    this.consumedOffsets = new HashMap<TopicPartition, Long>();
+    this.consumedOffsets = new HashMap<>();
+  }
+
+  @Override
+  public String name() {
+    return name;
   }
 
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, Receiver<Object, Object> receiver) {
+  public void addPartition(TopicPartition partition, Receiver receiver) {
     synchronized (this) {
-      RecordQueue<K, V> recordQueue = stash.get(partition);
+      RecordQueue recordQueue = stash.get(partition);
 
       if (recordQueue == null) {
-        stash.put(partition, createRecordQueue(partition, (Receiver<K, V>) receiver));
+        stash.put(partition, createRecordQueue(partition, receiver));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
@@ -54,16 +59,16 @@ public class StreamSynchronizer<K, V> {
   }
 
   @SuppressWarnings("unchecked")
-  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
 
         while (iterator.hasNext()) {
-          ConsumerRecord<K, V> record = iterator.next();
+          ConsumerRecord<Object, Object> record = iterator.next();
           long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
-          recordQueue.add(new StampedRecord<K, V>(record, timestamp));
+          recordQueue.add(new StampedRecord(record, timestamp));
           buffered++;
         }
 
@@ -105,7 +110,7 @@ public class StreamSynchronizer<K, V> {
       }
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
-      StampedRecord<K, V> record = recordQueue.next();
+      StampedRecord record = recordQueue.next();
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
@@ -135,8 +140,8 @@ public class StreamSynchronizer<K, V> {
     stash.clear();
   }
 
-  protected RecordQueue<K, V> createRecordQueue(TopicPartition partition, Receiver<K, V> receiver) {
-    return new RecordQueue<K, V>(partition, receiver, new MinTimestampTracker<ConsumerRecord<K, V>>());
+  protected RecordQueue createRecordQueue(TopicPartition partition, Receiver receiver) {
+    return new RecordQueue(partition, receiver, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
 }

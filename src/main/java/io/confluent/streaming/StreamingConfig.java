@@ -59,7 +59,7 @@ public class StreamingConfig {
     private Serializer<?> valSerializer;
     private Deserializer<?> keyDeserializer;
     private Deserializer<?> valDeserializer;
-    private TimestampExtractor<?, ?> timestampExtractor;
+    private TimestampExtractor timestampExtractor;
 
     public StreamingConfig(Properties config) {
         this.config = config;
@@ -121,11 +121,11 @@ public class StreamingConfig {
         return this.valDeserializer;
     }
 
-    public void timestampExtractor(TimestampExtractor<?, ?> timestampExtractor) {
+    public void timestampExtractor(TimestampExtractor timestampExtractor) {
         this.timestampExtractor = timestampExtractor;
     }
 
-    public TimestampExtractor<?, ?> timestampExtractor() {
+    public TimestampExtractor timestampExtractor() {
         return this.timestampExtractor;
     }
 }
