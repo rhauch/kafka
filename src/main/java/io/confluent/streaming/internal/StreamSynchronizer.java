@@ -15,7 +15,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Created by yasuhiro on 6/23/15.
  */
-public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
+public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
   public static class Status {
     private AtomicBoolean pollRequired = new AtomicBoolean();
@@ -31,21 +31,22 @@ public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
 
   public final String name;
   private final Ingestor ingestor;
-  private final Chooser<K, V> chooser;
-  private final TimestampExtractor<K, V> timestampExtractor;
-  private final Map<TopicPartition, RecordQueue<K, V>> stash = new HashMap<>();
+  private final Chooser chooser;
+  private final TimestampExtractor timestampExtractor;
+  private final Map<TopicPartition, RecordQueue> stash = new HashMap<>();
+
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
-  private final ArrayDeque<NewRecords<K, V>> newRecordBuffer = new ArrayDeque<>();
+  private final ArrayDeque<NewRecords> newRecordBuffer = new ArrayDeque<>();
 
   private long streamTime = -1;
   private volatile int buffered = 0;
 
   StreamSynchronizer(String name,
                      Ingestor ingestor,
-                     Chooser<K, V> chooser,
-                     TimestampExtractor<K, V> timestampExtractor,
+                     Chooser chooser,
+                     TimestampExtractor timestampExtractor,
                      int desiredUnprocessedPerPartition) {
     this.name = name;
     this.ingestor = ingestor;
@@ -55,38 +56,44 @@ public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
     this.consumedOffsets = new HashMap<>();
   }
 
+  @Override
+  public String name() {
+    return name;
+  }
+
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, Receiver<Object, Object> receiver) {
+  public void addPartition(TopicPartition partition, Receiver receiver) {
     synchronized (this) {
-      RecordQueue<K, V> recordQueue = stash.get(partition);
+      RecordQueue recordQueue = stash.get(partition);
 
       if (recordQueue == null) {
-        stash.put(partition, createRecordQueue(partition, (Receiver<K, V>) receiver));
+        stash.put(partition, createRecordQueue(partition, receiver));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
     }
   }
 
-  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+  @SuppressWarnings("unchecked")
+  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
     synchronized (this) {
       newRecordBuffer.addLast(new NewRecords<>(partition, iterator));
     }
   }
 
   private void ingestNewRecords() {
-    for (NewRecords<K, V> newRecords : newRecordBuffer) {
+    for (NewRecords newRecords : newRecordBuffer) {
       TopicPartition partition = newRecords.partition;
-      Iterator<ConsumerRecord<K, V>> iterator = newRecords.iterator;
+      Iterator<ConsumerRecord<Object, Object>> iterator = newRecords.iterator;
 
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
 
         while (iterator.hasNext()) {
-          ConsumerRecord<K, V> record = iterator.next();
+          ConsumerRecord<Object, Object> record = iterator.next();
           long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
-          recordQueue.add(new StampedRecord<>(record, timestamp));
+          recordQueue.add(new StampedRecord(record, timestamp));
           buffered++;
         }
 
@@ -124,7 +131,7 @@ public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
       }
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
-      StampedRecord<K, V> record = recordQueue.next();
+      StampedRecord record = recordQueue.next();
 
       if (recordQueue.size() < this.desiredUnprocessed)
         status.pollRequired(true);
@@ -155,8 +162,8 @@ public class StreamSynchronizer<K, V> implements ParallelExecutor.Task {
     stash.clear();
   }
 
-  protected RecordQueue<K, V> createRecordQueue(TopicPartition partition, Receiver<K, V> receiver) {
-    return new RecordQueue<K, V>(partition, receiver, new MinTimestampTracker<ConsumerRecord<K, V>>());
+  protected RecordQueue createRecordQueue(TopicPartition partition, Receiver receiver) {
+    return new RecordQueue(partition, receiver, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
   private static class NewRecords<K, V> {
