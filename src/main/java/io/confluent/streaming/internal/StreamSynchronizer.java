@@ -106,6 +106,7 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
         }
       }
     }
+    newRecordBuffer.clear();
   }
 
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
