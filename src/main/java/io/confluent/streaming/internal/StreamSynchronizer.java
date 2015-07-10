@@ -13,7 +13,7 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Created by yasuhiro on 6/23/15.
+ * StreamSynchronizer tries to synchronize the progress of streams from different topics in the same {@link SyncGroup}.
  */
 public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
@@ -43,6 +43,14 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   private long streamTime = -1;
   private volatile int buffered = 0;
 
+  /**
+   * Creates StreamSynchronizer
+   * @param name the name of {@link SyncGroup}
+   * @param ingestor the instance of {@link Ingestor}
+   * @param chooser the instance of {@link Chooser}
+   * @param timestampExtractor the instance of {@link TimestampExtractor}
+   * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
+   */
   StreamSynchronizer(String name,
                      Ingestor ingestor,
                      Chooser chooser,
@@ -61,6 +69,11 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     return name;
   }
 
+  /**
+   * Adds a partition and its receiver to this stream synchronizer
+   * @param partition the partition
+   * @param receiver the receiver
+   */
   @SuppressWarnings("unchecked")
   public void addPartition(TopicPartition partition, Receiver receiver) {
     synchronized (this) {
@@ -74,6 +87,11 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     }
   }
 
+  /**
+   * Adds records
+   * @param partition the partition
+   * @param iterator the iterator of records
+   */
   @SuppressWarnings("unchecked")
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
     synchronized (this) {
@@ -108,10 +126,19 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     }
   }
 
+  /**
+   * Returns a PunctuationScheduler
+   * @param processor the processor requesting scheduler
+   * @return PunctuationScheduler
+   */
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
   }
 
+  /**
+   * Processes one record
+   * @param context an application specific context object for a task
+   */
   @SuppressWarnings("unchecked")
   public void process(Object context) {
     Status status = (Status) context;
@@ -149,6 +176,10 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     }
   }
 
+  /**
+   * Returns consumed offsets
+   * @return the map of partition to consumed offset
+   */
   public Map<TopicPartition, Long> consumedOffsets() {
     return this.consumedOffsets;
   }
