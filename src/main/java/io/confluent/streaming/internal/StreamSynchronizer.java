@@ -5,6 +5,7 @@ import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayDeque;
 import java.util.HashMap;
@@ -62,12 +63,12 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   }
 
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, Receiver receiver) {
+  public void addPartition(TopicPartition partition, KStreamSource source) {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
 
       if (recordQueue == null) {
-        stash.put(partition, createRecordQueue(partition, receiver));
+        stash.put(partition, createRecordQueue(partition, source));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
@@ -75,25 +76,34 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   }
 
   @SuppressWarnings("unchecked")
-  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
+  public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
     synchronized (this) {
-      newRecordBuffer.addLast(new NewRecords<>(partition, iterator));
+      newRecordBuffer.addLast(new NewRecords(partition, iterator));
     }
   }
 
   private void ingestNewRecords() {
     for (NewRecords newRecords : newRecordBuffer) {
       TopicPartition partition = newRecords.partition;
-      Iterator<ConsumerRecord<Object, Object>> iterator = newRecords.iterator;
+      Iterator<ConsumerRecord<byte[], byte[]>> iterator = newRecords.iterator;
 
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
 
         while (iterator.hasNext()) {
-          ConsumerRecord<Object, Object> record = iterator.next();
-          long timestamp = timestampExtractor.extract(record.topic(), record.key(), record.value());
-          recordQueue.add(new StampedRecord(record, timestamp));
+          ConsumerRecord<byte[], byte[]> record = iterator.next();
+
+          // deserialize the raw record, extract the timestamp and put into the queue
+          Deserializer<?> keyDeserializer = recordQueue.source.context().keyDeserializer();
+          Deserializer<?> valDeserializer = recordQueue.source.context().valueDeserializer();
+
+          Object key = keyDeserializer.deserialize(record.topic(), record.key());
+          Object value = valDeserializer.deserialize(record.topic(), record.value());
+          ConsumerRecord deserializedRecord = new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
+
+          long timestamp = timestampExtractor.extract(record.topic(), key, value);
+          recordQueue.add(new StampedRecord(deserializedRecord, timestamp));
           buffered++;
         }
 
@@ -138,7 +148,7 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.receiver.receive(record.key(), record.value(), record.timestamp, streamTime);
+      recordQueue.source.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
@@ -162,15 +172,15 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     stash.clear();
   }
 
-  protected RecordQueue createRecordQueue(TopicPartition partition, Receiver receiver) {
-    return new RecordQueue(partition, receiver, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
+  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource source) {
+    return new RecordQueue(partition, source, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
-  private static class NewRecords<K, V> {
+  private static class NewRecords {
     final TopicPartition partition;
-    final Iterator<ConsumerRecord<K, V>> iterator;
+    final Iterator<ConsumerRecord<byte[], byte[]>> iterator;
 
-    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<byte[], byte[]>> iterator) {
       this.partition = partition;
       this.iterator = iterator;
     }
