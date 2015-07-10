@@ -54,7 +54,7 @@ public class RecordQueue {
    * @return StampedRecord
    */
   public StampedRecord next() {
-    StampedRecord elem = queue.getFirst();
+    StampedRecord elem = queue.pollFirst();
 
     if (elem == null) return null;
 
