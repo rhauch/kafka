@@ -2,29 +2,45 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
 import io.confluent.streaming.util.MinTimestampTracker;
+import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Created by yasuhiro on 6/23/15.
  */
-public class StreamSynchronizer implements SyncGroup {
+public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
+
+  public static class Status {
+    private AtomicBoolean pollRequired = new AtomicBoolean();
+
+    public void pollRequired(boolean flag) {
+      pollRequired.set(flag);
+    }
+
+    public boolean pollRequired() {
+      return pollRequired.get();
+    }
+  }
 
   public final String name;
   private final Ingestor ingestor;
   private final Chooser chooser;
   private final TimestampExtractor timestampExtractor;
   private final Map<TopicPartition, RecordQueue> stash = new HashMap<>();
+
   private final int desiredUnprocessed;
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
+  private final ArrayDeque<NewRecords> newRecordBuffer = new ArrayDeque<>();
 
   private long streamTime = -1;
-  private boolean pollRequired = false;
   private volatile int buffered = 0;
 
   StreamSynchronizer(String name,
@@ -61,6 +77,15 @@ public class StreamSynchronizer implements SyncGroup {
   @SuppressWarnings("unchecked")
   public void addRecords(TopicPartition partition, Iterator<ConsumerRecord<Object, Object>> iterator) {
     synchronized (this) {
+      newRecordBuffer.addLast(new NewRecords<>(partition, iterator));
+    }
+  }
+
+  private void ingestNewRecords() {
+    for (NewRecords newRecords : newRecordBuffer) {
+      TopicPartition partition = newRecords.partition;
+      Iterator<ConsumerRecord<Object, Object>> iterator = newRecords.iterator;
+
       RecordQueue recordQueue = stash.get(partition);
       if (recordQueue != null) {
         boolean wasEmpty = recordQueue.isEmpty();
@@ -83,22 +108,19 @@ public class StreamSynchronizer implements SyncGroup {
     }
   }
 
-  public boolean requiresPoll() {
-    return pollRequired;
-  }
-
   public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
     return new PunctuationSchedulerImpl(punctuationQueue, processor);
   }
 
   @SuppressWarnings("unchecked")
-  public void process() {
+  public void process(Object context) {
+    Status status = (Status) context;
     synchronized (this) {
-      pollRequired = false;
+      ingestNewRecords();
 
       RecordQueue recordQueue = chooser.next();
       if (recordQueue == null) {
-        pollRequired = true;
+        status.pollRequired(true);
         return;
       }
 
@@ -106,11 +128,13 @@ public class StreamSynchronizer implements SyncGroup {
 
       if (recordQueue.size() == this.desiredUnprocessed) {
         ingestor.unpause(recordQueue.partition(), recordQueue.offset());
-        pollRequired = true;
       }
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
       StampedRecord record = recordQueue.next();
+
+      if (recordQueue.size() < this.desiredUnprocessed)
+        status.pollRequired(true);
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
@@ -122,8 +146,6 @@ public class StreamSynchronizer implements SyncGroup {
       buffered--;
 
       punctuationQueue.mayPunctuate(streamTime);
-
-      return;
     }
   }
 
@@ -144,4 +166,13 @@ public class StreamSynchronizer implements SyncGroup {
     return new RecordQueue(partition, receiver, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
+  private static class NewRecords<K, V> {
+    final TopicPartition partition;
+    final Iterator<ConsumerRecord<K, V>> iterator;
+
+    NewRecords(TopicPartition partition, Iterator<ConsumerRecord<K, V>> iterator) {
+      this.partition = partition;
+      this.iterator = iterator;
+    }
+  }
 }
