@@ -1,6 +1,9 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.*;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.PunctuationScheduler;
+import io.confluent.streaming.SyncGroup;
+import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -63,12 +66,12 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   }
 
   @SuppressWarnings("unchecked")
-  public void addPartition(TopicPartition partition, KStreamSource source) {
+  public void addPartition(TopicPartition partition, KStreamImpl stream) {
     synchronized (this) {
       RecordQueue recordQueue = stash.get(partition);
 
       if (recordQueue == null) {
-        stash.put(partition, createRecordQueue(partition, source));
+        stash.put(partition, createRecordQueue(partition, stream));
       } else {
         throw new IllegalStateException("duplicate partition");
       }
@@ -82,6 +85,7 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     }
   }
 
+  @SuppressWarnings("unchecked")
   private void ingestNewRecords() {
     for (NewRecords newRecords : newRecordBuffer) {
       TopicPartition partition = newRecords.partition;
@@ -95,8 +99,8 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
           ConsumerRecord<byte[], byte[]> record = iterator.next();
 
           // deserialize the raw record, extract the timestamp and put into the queue
-          Deserializer<?> keyDeserializer = recordQueue.source.context().keyDeserializer();
-          Deserializer<?> valDeserializer = recordQueue.source.context().valueDeserializer();
+          Deserializer<?> keyDeserializer = recordQueue.stream.context().keyDeserializer();
+          Deserializer<?> valDeserializer = recordQueue.stream.context().valueDeserializer();
 
           Object key = keyDeserializer.deserialize(record.topic(), record.key());
           Object value = valDeserializer.deserialize(record.topic(), record.value());
@@ -149,7 +153,7 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.source.receive(record.key(), record.value(), record.timestamp, streamTime);
+      recordQueue.stream.receive(record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
@@ -173,8 +177,8 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     stash.clear();
   }
 
-  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamSource source) {
-    return new RecordQueue(partition, source, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
+  protected RecordQueue createRecordQueue(TopicPartition partition, KStreamImpl stream) {
+    return new RecordQueue(partition, stream, new MinTimestampTracker<ConsumerRecord<Object, Object>>());
   }
 
   private static class NewRecords {

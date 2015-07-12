@@ -1,6 +1,6 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.util.Stamped;
+import io.confluent.streaming.KStream;
 import io.confluent.streaming.util.TimestampTracker;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -13,14 +13,14 @@ import java.util.ArrayDeque;
 public class RecordQueue {
 
   private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-  public final KStreamSource source;
+  public final KStreamImpl stream;
   private final TopicPartition partition;
   private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
   private long offset;
 
-  public RecordQueue(TopicPartition partition, KStreamSource source, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+  public RecordQueue(TopicPartition partition, KStreamImpl stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
     this.partition = partition;
-    this.source = source;
+    this.stream = stream;
     this.timestampTracker = timestampTracker;
   }
 
