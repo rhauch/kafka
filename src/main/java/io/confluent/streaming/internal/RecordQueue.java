@@ -22,7 +22,7 @@ public class RecordQueue {
   /**
    * Creates a new instance of RecordQueue
    * @param partition partition
-   * @param stream KStreamImpl that receives records
+   * @param stream the instance of KStreamImpl that receives records
    * @param timestampTracker TimestampTracker
    */
   public RecordQueue(TopicPartition partition, KStreamImpl stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
