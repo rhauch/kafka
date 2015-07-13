@@ -60,7 +60,7 @@ public class IngestorImpl implements Ingestor {
       StreamSynchronizer streamSynchronizer = streamSynchronizers.get(partition);
 
       if (streamSynchronizer != null)
-        streamSynchronizer.addRecords(partition, new DeserializingIterator(records.records(partition).iterator()));
+        streamSynchronizer.addRecords(partition, records.records(partition).iterator());
       else
         log.warn("unused topic: " + partition.topic());
     }
@@ -112,19 +112,4 @@ public class IngestorImpl implements Ingestor {
     toBePaused.clear();
     streamSynchronizers.clear();
   }
-
-  private class DeserializingIterator extends FilteredIterator<ConsumerRecord<Object, Object>, ConsumerRecord<byte[], byte[]>> {
-
-    DeserializingIterator(Iterator<ConsumerRecord<byte[], byte[]>> inner) {
-      super(inner);
-    }
-
-    protected ConsumerRecord<Object, Object> filter(ConsumerRecord<byte[], byte[]> record) {
-      Object key = keyDeserializer.deserialize(record.topic(), record.key());
-      Object value = valueDeserializer.deserialize(record.topic(), record.value());
-      return new ConsumerRecord<>(record.topic(), record.partition(), record.offset(), key, value);
-    }
-
-  }
-
 }
