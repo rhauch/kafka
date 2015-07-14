@@ -180,7 +180,7 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 
-      recordQueue.stream.receive(record.key(), record.value(), record.timestamp, streamTime);
+      recordQueue.stream.receive(record.topic(), record.key(), record.value(), record.timestamp, streamTime);
       consumedOffsets.put(recordQueue.partition(), record.offset());
 
       if (recordQueue.size() > 0) chooser.add(recordQueue);
