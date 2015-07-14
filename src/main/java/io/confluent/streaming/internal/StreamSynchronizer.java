@@ -21,18 +21,6 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
-  public static class Status {
-    private AtomicBoolean pollRequired = new AtomicBoolean();
-
-    public void pollRequired(boolean flag) {
-      pollRequired.set(flag);
-    }
-
-    public boolean pollRequired() {
-      return pollRequired.get();
-    }
-  }
-
   public final String name;
   private final Ingestor ingestor;
   private final Chooser chooser;
@@ -152,17 +140,15 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
   /**
    * Processes one record
-   * @param context an application specific context object for a task
    */
   @SuppressWarnings("unchecked")
-  public void process(Object context) {
-    Status status = (Status) context;
+  @Override
+  public void process() {
     synchronized (this) {
       ingestNewRecords();
 
       RecordQueue recordQueue = chooser.next();
       if (recordQueue == null) {
-        status.pollRequired(true);
         return;
       }
 
@@ -174,9 +160,6 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
 
       long trackedTimestamp = recordQueue.trackedTimestamp();
       StampedRecord record = recordQueue.next();
-
-      if (recordQueue.size() < this.desiredUnprocessed)
-        status.pollRequired(true);
 
       if (streamTime < trackedTimestamp) streamTime = trackedTimestamp;
 

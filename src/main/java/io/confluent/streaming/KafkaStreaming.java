@@ -38,7 +38,6 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -134,11 +133,7 @@ public class KafkaStreaming implements Runnable {
         this.streamingMetrics = new KafkaStreamingMetrics();
         this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
-        this.ingestor =
-           new IngestorImpl(this.consumer,
-                             (Deserializer<Object>) config.keyDeserializer(),
-                             (Deserializer<Object>) config.valueDeserializer(),
-                             this.config.pollTimeMs);
+        this.ingestor = new IngestorImpl(this.consumer, this.config.pollTimeMs);
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
@@ -213,16 +208,10 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
-            StreamSynchronizer.Status status = new StreamSynchronizer.Status();
-            status.pollRequired(true);
-
             while (stillRunning()) {
-                if (status.pollRequired()) {
-                    ingestor.poll();
-                    status.pollRequired(false);
-                }
+                ingestor.poll();
 
-                parallelExecutor.execute(streamSynchronizers, status);
+                parallelExecutor.execute(streamSynchronizers);
 
                 maybeCommit();
                 maybeCleanState();
