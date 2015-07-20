@@ -2,7 +2,6 @@ package io.confluent.streaming.internal;
 
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
-import io.confluent.streaming.SyncGroup;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
@@ -14,12 +13,11 @@ import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * StreamSynchronizer tries to synchronize the progress of streams from different topics in the same {@link SyncGroup}.
+ * A StreamGroup is composed of multiple streams from different topics that need to be synchronized.
  */
-public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
+public class StreamGroup implements ParallelExecutor.Task {
 
   public final String name;
   private final Ingestor ingestor;
@@ -28,6 +26,8 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   private final Map<TopicPartition, RecordQueue> stash = new HashMap<>();
 
   private final int desiredUnprocessed;
+
+  // TODO: merge stash, consumedOffset, and newRecordBuffer into sth. like partition metadata
   private final Map<TopicPartition, Long> consumedOffsets;
   private final PunctuationQueue punctuationQueue = new PunctuationQueue();
   private final ArrayDeque<NewRecords> newRecordBuffer = new ArrayDeque<>();
@@ -36,18 +36,18 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
   private volatile int buffered = 0;
 
   /**
-   * Creates StreamSynchronizer
-   * @param name the name of {@link SyncGroup}
+   * Creates StreamGroup
+   * @param name the name of group
    * @param ingestor the instance of {@link Ingestor}
    * @param chooser the instance of {@link Chooser}
    * @param timestampExtractor the instance of {@link TimestampExtractor}
    * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
    */
-  StreamSynchronizer(String name,
-                     Ingestor ingestor,
-                     Chooser chooser,
-                     TimestampExtractor timestampExtractor,
-                     int desiredUnprocessedPerPartition) {
+  StreamGroup(String name,
+              Ingestor ingestor,
+              Chooser chooser,
+              TimestampExtractor timestampExtractor,
+              int desiredUnprocessedPerPartition) {
     this.name = name;
     this.ingestor = ingestor;
     this.chooser = chooser;
@@ -56,9 +56,35 @@ public class StreamSynchronizer implements SyncGroup, ParallelExecutor.Task {
     this.consumedOffsets = new HashMap<>();
   }
 
-  @Override
   public String name() {
     return name;
+  }
+
+  /**
+   * Merges a stream group into this group
+   */
+  public void mergeStreamGroup(StreamGroup other) {
+    // check these groups have the same ingestor
+    if (!this.ingestor.equals(other.ingestor))
+      throw new IllegalArgumentException("groups with different ingestors cannot be merged");
+
+    // check these group have the same chooser and time extractor types
+    if (!this.chooser.getClass().equals(other.chooser.getClass()))
+      throw new IllegalArgumentException("groups with different type of choosers cannot be merged");
+
+    if (!this.timestampExtractor.getClass().equals(other.timestampExtractor.getClass()))
+      throw new IllegalArgumentException("groups with different type of time extractors cannot be merged");
+
+    // add all the other's groups partitions
+    for (TopicPartition partition : other.stash.keySet()) {
+      this.stash.put(partition, other.stash.get(partition));
+      this.consumedOffsets.put(partition, other.consumedOffsets.get(partition));
+    }
+
+    // add all the other's buffered records
+    for (NewRecords records : other.newRecordBuffer) {
+      this.newRecordBuffer.addLast(records);
+    }
   }
 
   /**
