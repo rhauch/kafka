@@ -127,6 +127,7 @@ abstract class KStreamImpl<K, V> implements KStream<K, V>, Receiver {
     };
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void process(final Processor<K, V> processor) {
     Receiver receiver = new Receiver() {

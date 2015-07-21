@@ -20,6 +20,7 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
     this.window = window;
   }
 
+  @SuppressWarnings("unchecked")
   @Override
   public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
