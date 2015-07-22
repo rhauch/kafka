@@ -22,11 +22,11 @@ public class KStreamWindowedImpl<K, V> extends KStreamImpl<K, V> implements KStr
 
   @SuppressWarnings("unchecked")
   @Override
-  public void receive(String topic, Object key, Object value, long timestamp, long streamTime) {
+  public void receive(Object key, Object value, long timestamp, long streamTime) {
     synchronized(this) {
       window.put((K)key, (V)value, timestamp);
       // KStreamWindowed needs to forward the topic name since it may receive directly from KStreamSource
-      forward(topic, key, value, timestamp, streamTime);
+      forward(key, value, timestamp, streamTime);
     }
   }
 
