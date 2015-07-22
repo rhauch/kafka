@@ -3,7 +3,6 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
 import io.confluent.streaming.PunctuationScheduler;
-import io.confluent.streaming.RecordCollector;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.serialization.Serializer;
 
@@ -23,6 +22,38 @@ public class ProcessorContextImpl implements Processor.ProcessorContext {
     this.context = context;
     this.scheduler = scheduler;
     this.streamGroup = streamGroup;
+  }
+
+  @Override
+  public String topic() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
+    return this.streamGroup.record().topic();
+  }
+
+  @Override
+  public int partition() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
+
+    return this.streamGroup.record().partition();
+  }
+
+  @Override
+  public long offset() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
+
+    return this.streamGroup.record().offset();
+  }
+
+  @Override
+  public long timestamp() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
+
+    return this.streamGroup.record().timestamp;
   }
 
   @Override
