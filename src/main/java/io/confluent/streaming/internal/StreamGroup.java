@@ -210,7 +210,6 @@ public class StreamGroup implements ParallelExecutor.Task {
         ingestor.commit(consumedOffsets());
       }
 
-
       if (commitRequested) ingestor.commit(Collections.singletonMap(
           new TopicPartition(currRecord.topic(), currRecord.partition()),
           currRecord.offset()));
@@ -218,6 +217,7 @@ public class StreamGroup implements ParallelExecutor.Task {
       if (recordQueue.size() > 0) chooser.add(recordQueue);
 
       buffered--;
+      currRecord = null;
 
       punctuationQueue.mayPunctuate(streamTime);
     }
