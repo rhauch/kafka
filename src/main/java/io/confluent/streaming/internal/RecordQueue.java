@@ -13,7 +13,7 @@ import java.util.ArrayDeque;
 public class RecordQueue {
 
   private final ArrayDeque<StampedRecord> queue = new ArrayDeque<>();
-  public final KStreamImpl stream;
+  public final KStreamSource stream;
   private final TopicPartition partition;
   private TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker;
   private long offset;
@@ -24,7 +24,7 @@ public class RecordQueue {
    * @param stream the instance of KStreamImpl that receives records
    * @param timestampTracker TimestampTracker
    */
-  public RecordQueue(TopicPartition partition, KStreamImpl stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
+  public RecordQueue(TopicPartition partition, KStreamSource stream, TimestampTracker<ConsumerRecord<Object, Object>> timestampTracker) {
     this.partition = partition;
     this.stream = stream;
     this.timestampTracker = timestampTracker;
