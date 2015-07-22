@@ -173,7 +173,7 @@ public class StreamGroup implements ParallelExecutor.Task {
   @Override
   public boolean process() {
     synchronized (this) {
-      boolean readyForNExtExecution = false;
+      boolean readyForNextExecution = false;
       ingestNewRecords();
 
       RecordQueue recordQueue = chooser.next();
@@ -202,7 +202,7 @@ public class StreamGroup implements ParallelExecutor.Task {
           record.offset()));
 
       if (recordQueue.size() > 0) {
-        readyForNExtExecution = true;
+        readyForNextExecution = true;
         chooser.add(recordQueue);
       }
 
@@ -211,7 +211,7 @@ public class StreamGroup implements ParallelExecutor.Task {
 
       punctuationQueue.mayPunctuate(streamTime);
 
-      return readyForNExtExecution;
+      return readyForNextExecution;
     }
   }
 
