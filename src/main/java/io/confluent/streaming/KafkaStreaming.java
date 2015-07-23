@@ -139,7 +139,7 @@ public class KafkaStreaming implements Runnable {
         this.streamingMetrics = new KafkaStreamingMetrics();
         this.requestingCommit = new ArrayList<>();
         this.config = new ProcessorConfig(config.config());
-        this.ingestor = new IngestorImpl(this.consumer, this.config.pollTimeMs);
+        this.ingestor = new IngestorImpl(this.consumer);
         this.running = true;
         this.lastCommit = 0;
         this.nextStateCleaning = Long.MAX_VALUE;
@@ -221,10 +221,12 @@ public class KafkaStreaming implements Runnable {
 
     private void runLoop() {
         try {
-            while (stillRunning()) {
-                ingestor.poll();
+            boolean readyForNextExecution = false;
 
-                parallelExecutor.execute(streamGroups);
+            while (stillRunning()) {
+                ingestor.poll(readyForNextExecution ? 0 : this.config.pollTimeMs);
+
+                readyForNextExecution = parallelExecutor.execute(streamGroups);
 
                 maybeCommit();
                 maybeCleanState();
