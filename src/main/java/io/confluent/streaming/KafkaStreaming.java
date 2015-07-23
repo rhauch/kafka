@@ -90,7 +90,6 @@ public class KafkaStreaming implements Runnable {
 
     private final Class<? extends KStreamJob> jobClass;
     private final Set<String> topics;
-    private final Map<Integer, Collection<StreamGroup>> streamSynchronizersForPartition = new HashMap<>();
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
     private final ParallelExecutor parallelExecutor;
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
@@ -200,7 +199,6 @@ public class KafkaStreaming implements Runnable {
         producer.close();
         consumer.close();
         parallelExecutor.shutdown();
-        streamSynchronizersForPartition.clear();
         streamGroups.clear();
         shutdownComplete.countDown();
         log.info("Shut down complete");
@@ -354,7 +352,6 @@ public class KafkaStreaming implements Runnable {
                 }
 
                 Collection<StreamGroup> streamGroups = kstreamContext.streamSynchronizers();
-                this.streamSynchronizersForPartition.put(id, streamGroups);
                 for (StreamGroup streamGroup : streamGroups) {
                     streamGroups.add(streamGroup);
                 }
