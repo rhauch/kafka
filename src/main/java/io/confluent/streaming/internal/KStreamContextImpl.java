@@ -133,7 +133,7 @@ public class KStreamContextImpl implements KStreamContext {
 
     synchronized (this) {
       // if topics not specified, use all the topics be default
-      if (topics == null) {
+      if (topics == null || topics.length == 0) {
         fromTopics = this.topics;
       } else {
         fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
