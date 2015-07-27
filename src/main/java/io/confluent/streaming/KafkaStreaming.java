@@ -59,15 +59,7 @@ public class KafkaStreaming implements Runnable {
 
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
-    //
-    // Container State Transition
-    //
-    //           run()            startShutdown()            shutdown()
-    // CREATED --------> RUNNING ----------------> STOPPING -----------> STOPPED
-    //    |                                            ^
-    //    |           startShutdown()                  |
-    //    +--------------------------------------------+
-    //
+    // Container States
     private final int CREATED = 0;
     private final int RUNNING = 1;
     private final int STOPPING = 2;
