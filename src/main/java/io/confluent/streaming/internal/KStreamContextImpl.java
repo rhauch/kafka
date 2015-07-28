@@ -262,7 +262,7 @@ public class KStreamContextImpl implements KStreamContext {
     initialized = true;
   }
 
-  public void getConsumedOffsets(Map<TopicPartition, Long> offsets) {
+  public void putConsumedOffsetsTo(Map<TopicPartition, Long> offsets) {
     for (StreamGroup streamGroup : streamGroups.values())
       offsets.putAll(streamGroup.consumedOffsets());
   }
