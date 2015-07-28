@@ -9,6 +9,7 @@ import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.TimestampExtractor;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.Producer;
@@ -238,12 +239,11 @@ public class KStreamContextImpl implements KStreamContext {
     }
   }
 
-
   @Override
-  public void restore(StateStore engine) throws Exception {
+  public void restore(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
-    stateMgr.registerAndRestore(collector, engine);
+    stateMgr.registerAndRestore(store, restoreFunc);
   }
 
   @Override
