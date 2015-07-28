@@ -2,17 +2,20 @@ package io.confluent.streaming.kv;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.StorageEngine;
 import io.confluent.streaming.kv.internals.MeteredKeyValueStore;
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.clients.producer.ProducerRecord;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 
-import java.util.*;
+import java.util.HashSet;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.NavigableMap;
+import java.util.Set;
+import java.util.TreeMap;
 
 /**
  * An in-memory key-value store based on a TreeMap
@@ -20,37 +23,29 @@ import java.util.*;
  * @param <K> The key type
  * @param <V> The value type
  */
-public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> implements KeyValueStore<K, V>, StorageEngine {
+public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
     public InMemoryKeyValueStore(String name, KStreamContext context) {
         super(name, "kafka-streams", new MemoryStore<K, V>(name, context), context.metrics(), new SystemTime());
     }
 
-    private static class MemoryStore<K, V> implements KeyValueStore<K, V>, StorageEngine {
+    private static class MemoryStore<K, V> implements KeyValueStore<K, V> {
 
         private final String topic;
         private final int partition;
-        private final NavigableMap<K, V> store;
         private final Set<K> dirty;
         private final int maxDirty;
-        private final Serializer<K> keySerializer;
-        private final Serializer<V> valueSerializer;
-        private final Deserializer<K> keyDeserializer;
-        private final Deserializer<V> valueDeserializer;
-        private RecordCollector collector;
+        private final NavigableMap<K, V> map;
+        private final KStreamContext context;
 
         @SuppressWarnings("unchecked")
         public MemoryStore(String name, KStreamContext context) {
             this.topic = name;
             this.partition = context.id();
-            this.store = new TreeMap<K, V>();
+            this.map = new TreeMap<K, V>();
             this.dirty = new HashSet<K>();
-            this.collector = null;
             this.maxDirty = 100;
-            this.keySerializer = (Serializer<K>) context.keySerializer();
-            this.valueSerializer = (Serializer<V>) context.valueSerializer();
-            this.keyDeserializer = (Deserializer<K>) context.keyDeserializer();
-            this.valueDeserializer = (Deserializer<V>) context.valueDeserializer();
+            this.context = context;
         }
 
         @Override
@@ -60,13 +55,13 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
 
         @Override
         public V get(K key) {
-            return this.store.get(key);
+            return this.map.get(key);
         }
 
         @Override
         public void put(K key, V value) {
-            this.store.put(key, value);
-            if(this.collector != null) {
+            this.map.put(key, value);
+            if(context.recordCollector() != null) {
                 this.dirty.add(key);
                 if (this.dirty.size() > this.maxDirty)
                     flush();
@@ -86,42 +81,42 @@ public class InMemoryKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> impl
 
         @Override
         public KeyValueIterator<K, V> range(K from, K to) {
-            return new MemoryStoreIterator<K, V>(this.store.subMap(from, true, to, false).entrySet().iterator());
+            return new MemoryStoreIterator<K, V>(this.map.subMap(from, true, to, false).entrySet().iterator());
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
-            return new MemoryStoreIterator<K, V>(this.store.entrySet().iterator());
+            return new MemoryStoreIterator<K, V>(this.map.entrySet().iterator());
         }
 
-        @Override
-        public void registerAndRestore(RecordCollector collector,
-                                       Consumer<byte[], byte[]> consumer,
-                                       TopicPartition partition,
-                                       long checkpointedOffset,
-                                       long endOffset) {
-            this.collector = collector;
-            while (true) {
-                for(ConsumerRecord<byte[], byte[]> record: consumer.poll(100))
-                    this.store.put(keyDeserializer.deserialize(partition.topic(), record.key()),
-                                   valueDeserializer.deserialize(partition.topic(), record.value()));
-                long position = consumer.position(partition);
-                if (position == endOffset)
-                    break;
-                else if(position > endOffset)
-                    throw new IllegalStateException("This should not happen.");
-            }
-        }
-
+        @SuppressWarnings("unchecked")
         @Override
         public void flush() {
-            if(this.collector != null) {
+            RecordCollector collector = context.recordCollector();
+            Serializer<K> keySerializer = (Serializer<K>) context.keySerializer();
+            Serializer<V> valueSerializer = (Serializer<V>) context.valueSerializer();
+
+            if(collector != null) {
                 for (K k : this.dirty) {
-                    V v = this.store.get(k);
-                    this.collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), this.keySerializer, this.valueSerializer);
+                    V v = this.map.get(k);
+                    collector.send(new ProducerRecord<>(this.topic, this.partition, k, v), keySerializer, valueSerializer);
                 }
                 this.dirty.clear();
             }
+        }
+
+        @Override
+        public void restore() {
+            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
+            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
+
+            context.restore(this, new RestoreFunc () {
+                @Override
+                public void apply(byte[] key, byte[] value) {
+                    map.put(keyDeserializer.deserialize(topic, key),
+                        valDeserializer.deserialize(topic, value));
+                }
+            });
         }
 
         @Override

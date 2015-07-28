@@ -5,13 +5,15 @@ import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamException;
 import io.confluent.streaming.KStreamJob;
 import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.StorageEngine;
+import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.TimestampExtractor;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.Util;
-import org.apache.kafka.clients.consumer.Consumer;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.slf4j.Logger;
@@ -46,7 +48,8 @@ public class KStreamContextImpl implements KStreamContext {
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
   private final ProcessorStateManager stateMgr;
-  private Consumer<byte[], byte[]> restoreConsumer;
+
+  private boolean initialized = false;
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
@@ -63,7 +66,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
-    this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
+    this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)),
+        new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     this.metrics = metrics;
   }
 
@@ -180,6 +184,10 @@ public class KStreamContextImpl implements KStreamContext {
     return stateMgr.baseDir();
   }
 
+  public ProcessorStateManager stateMgr() {
+    return stateMgr;
+  }
+
   @Override
   public Metrics metrics() {
     return metrics;
@@ -210,15 +218,15 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public void restore(StorageEngine engine) throws Exception {
+  public void restore(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
-    stateMgr.registerAndRestore(collector, restoreConsumer, engine);
+    stateMgr.registerAndRestore(store, restoreFunc);
   }
 
   @Override
   public void ensureInitialization() {
-    if (restoreConsumer != null)
+    if (!initialized)
       throw new IllegalStateException("context initialization is already finished");
   }
 
@@ -231,15 +239,9 @@ public class KStreamContextImpl implements KStreamContext {
     return streamGroups.values();
   }
 
-  public void init(Consumer<byte[], byte[]> restoreConsumer) throws IOException {
+  public void init() throws IOException {
     stateMgr.init();
-    try {
-      this.restoreConsumer = restoreConsumer;
-      job.init(this);
-    }
-    finally {
-      this.restoreConsumer = null;
-    }
+    job.init(this);
 
     // add partition -> stream group mappings to the ingestor
     for (Map.Entry<String, KStreamSource<?,?>> entry : sourceStreams.entrySet()) {
@@ -256,6 +258,8 @@ public class KStreamContextImpl implements KStreamContext {
       }
       throw new KStreamException("unused topics: " + Util.mkString(unusedTopics));
     }
+
+    initialized = true;
   }
 
   public void getConsumedOffsets(Map<TopicPartition, Long> offsets) {

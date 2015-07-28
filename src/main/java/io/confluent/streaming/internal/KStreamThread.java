@@ -226,9 +226,6 @@ public class KStreamThread extends Thread {
     private void addPartitions(Collection<TopicPartition> assignment) {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
-        Consumer<byte[], byte[]> restoreConsumer =
-          new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-
         for (TopicPartition partition : partitions) {
             final Integer id = partition.partition();
             KStreamContextImpl kstreamContext = kstreamContexts.get(id);
@@ -241,7 +238,7 @@ public class KStreamThread extends Thread {
                 kstreamContexts.put(id, kstreamContext);
 
                 try {
-                    kstreamContext.init(restoreConsumer);
+                    kstreamContext.init();
                 }
                 catch (Exception e) {
                     throw new KafkaException(e);
@@ -254,7 +251,6 @@ public class KStreamThread extends Thread {
             }
         }
 
-        restoreConsumer.close();
         nextStateCleaning = time.milliseconds() + config.stateCleanupDelay;
     }
 

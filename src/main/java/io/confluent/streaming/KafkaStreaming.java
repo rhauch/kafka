@@ -156,5 +156,4 @@ public class KafkaStreaming implements Runnable {
             }
         }
     }
-
 }
