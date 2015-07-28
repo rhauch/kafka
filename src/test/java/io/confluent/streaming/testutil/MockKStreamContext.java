@@ -5,8 +5,8 @@ import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.internal.StreamGroup;
+import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
@@ -52,9 +52,6 @@ public class MockKStreamContext implements KStreamContext {
   public RecordCollector recordCollector() { throw new UnsupportedOperationException("recordCollector() not supported."); }
 
   @Override
-  public Coordinator coordinator() { throw new UnsupportedOperationException("coordinator() not supported."); }
-
-  @Override
   public Map<String, Object> getContext() { throw new UnsupportedOperationException("getContext() not supported."); }
 
   @Override
@@ -70,7 +67,7 @@ public class MockKStreamContext implements KStreamContext {
   public StreamGroup roundRobinStreamGroup(String name) { throw new UnsupportedOperationException("roundRobinStreamGroup() not supported."); }
 
   @Override
-  public void restore(StateStore engine) throws Exception { throw new UnsupportedOperationException("restore() not supported."); }
+  public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
 
   @Override
   public void ensureInitialization() {}

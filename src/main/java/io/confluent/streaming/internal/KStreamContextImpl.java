@@ -1,6 +1,5 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.Coordinator;
 import io.confluent.streaming.KStream;
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamException;
@@ -12,7 +11,6 @@ import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
-import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -39,12 +37,9 @@ public class KStreamContextImpl implements KStreamContext {
 
   public final int id;
   private final KStreamJob job;
-  private final Set<String> topics;
-
   private final Ingestor ingestor;
   private final RecordCollectorImpl collector;
 
-  private final Coordinator coordinator;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<>();
   private final TimestampExtractor timestampExtractor;
@@ -60,27 +55,20 @@ public class KStreamContextImpl implements KStreamContext {
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
                             KStreamJob job,
-                            Set<String> topics,
                             Ingestor ingestor,
-                            Producer<byte[], byte[]> producer,
-                            Coordinator coordinator,
+                            RecordCollectorImpl collector,
                             StreamingConfig streamingConfig,
                             ProcessorConfig processorConfig,
                             Metrics metrics) {
     this.id = id;
     this.job = job;
-    this.topics = topics;
     this.ingestor = ingestor;
-
-    this.collector =
-      new RecordCollectorImpl(producer, (Serializer<Object>)streamingConfig.keySerializer(), (Serializer<Object>)streamingConfig.valueSerializer());
-
-    this.coordinator = coordinator;
+    this.collector = collector;
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
 
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
-    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is  missing");
+    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is missing");
 
     this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)),
         new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
@@ -137,15 +125,15 @@ public class KStreamContextImpl implements KStreamContext {
 
     synchronized (this) {
       // if topics not specified, use all the topics be default
-      if (topics == null) {
-        fromTopics = this.topics;
+      if (topics == null || topics.length == 0) {
+        fromTopics = ingestor.topics();
       } else {
         fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
       }
 
       // iterate over the topics and check if the stream has already been created for them
       for (String topic : fromTopics) {
-        if (!this.topics.contains(topic))
+        if (!ingestor.topics().contains(topic))
           throw new IllegalArgumentException("topic not subscribed: " + topic);
 
         if (sourceStreams.containsKey(topic))
@@ -189,11 +177,6 @@ public class KStreamContextImpl implements KStreamContext {
   @Override
   public RecordCollector recordCollector() {
     return collector;
-  }
-
-  @Override
-  public Coordinator coordinator() {
-    return coordinator;
   }
 
   @Override
@@ -267,9 +250,9 @@ public class KStreamContextImpl implements KStreamContext {
       ingestor.addPartitionStreamToGroup(streamGroup, partition);
     }
 
-    if (!topics.equals(sourceStreams.keySet())) {
+    if (!ingestor.topics().equals(sourceStreams.keySet())) {
       LinkedList<String> unusedTopics = new LinkedList<>();
-      for (String topic : topics) {
+      for (String topic : ingestor.topics()) {
         if (!sourceStreams.containsKey(topic))
           unusedTopics.add(topic);
       }
