@@ -45,7 +45,6 @@ public class KStreamContextImpl implements KStreamContext {
   private final StreamingConfig streamingConfig;
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
-  private final File stateDir;
   private final ProcessorStateManager stateMgr;
   private Consumer<byte[], byte[]> restoreConsumer;
 
@@ -63,12 +62,8 @@ public class KStreamContextImpl implements KStreamContext {
     this.collector = collector;
     this.streamingConfig = streamingConfig;
     this.processorConfig = processorConfig;
-
     this.timestampExtractor = this.streamingConfig.timestampExtractor();
-    if (this.timestampExtractor == null) throw new NullPointerException("timestamp extractor is missing");
-
     this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)));
-    this.stateDir = this.stateMgr.baseDir();
     this.metrics = metrics;
   }
 
@@ -182,7 +177,7 @@ public class KStreamContextImpl implements KStreamContext {
 
   @Override
   public File stateDir() {
-    return stateDir;
+    return stateMgr.baseDir();
   }
 
   @Override
@@ -214,7 +209,6 @@ public class KStreamContextImpl implements KStreamContext {
     }
   }
 
-
   @Override
   public void restore(StorageEngine engine) throws Exception {
     ensureInitialization();
@@ -228,7 +222,12 @@ public class KStreamContextImpl implements KStreamContext {
       throw new IllegalStateException("context initialization is already finished");
   }
 
-  public Collection<StreamGroup> streamSynchronizers() {
+  @Override
+  public void flush() {
+    stateMgr.flush();
+  }
+
+  public Collection<StreamGroup> streamGroups() {
     return streamGroups.values();
   }
 
@@ -259,13 +258,17 @@ public class KStreamContextImpl implements KStreamContext {
     }
   }
 
-  @Override
-  public void flush() {
-    stateMgr.flush();
+  public void getConsumedOffsets(Map<TopicPartition, Long> offsets) {
+    for (StreamGroup streamGroup : streamGroups.values())
+      offsets.putAll(streamGroup.consumedOffsets());
   }
 
   public void close() throws Exception {
     stateMgr.close(collector.offsets());
+
+    for (StreamGroup streamGroup : streamGroups.values())
+      streamGroup.close();
+
     job.close();
   }
 
