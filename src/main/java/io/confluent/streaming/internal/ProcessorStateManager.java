@@ -19,8 +19,10 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.OffsetCheckpoint;
+import kafka.cluster.Partition;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,18 +67,43 @@ public class ProcessorStateManager {
         checkpoint.delete();
     }
 
-    public void registerAndRestore(StateStore store, RestoreFunc restoreFunc) {
+    public void register(StateStore store) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
         if(this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
+        // check that the underlying change log topic exist or not
+        if (restoreConsumer.listTopics().keySet().contains(store.name())) {
+            // TODO: if we know the total number of context ids then we can just check if the #.partitions match that number.
+            // my id must be in the partition list
+            boolean partitionNotFound = true;
+            for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
+                if (partitionInfo.partition() == id) {
+                    partitionNotFound = false;
+                    break;
+                }
+            }
+
+            if (partitionNotFound)
+                throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition for group " + id);
+
+        } else {
+            // try to create the topic with the number of partitions equal to the total number of store instances.
+            // TODO: this is not possible yet since we do not know the total number of ids.
+        }
+
         // register store
         this.stores.put(store.name(), store);
+    }
 
+    public void restore(StateStore store, RestoreFunc restoreFunc) {
         // subscribe to the store's partition
         TopicPartition storePartition = new TopicPartition(store.name(), id);
+        if (!restoreConsumer.subscriptions().isEmpty()) {
+            throw new IllegalStateException("Restore consumer should have not subscribed to any partitions beforehand");
+        }
         restoreConsumer.subscribe(storePartition);
 
         // calculate the end offset of the partition
@@ -84,28 +111,34 @@ public class ProcessorStateManager {
         restoreConsumer.seekToEnd(storePartition);
         long endOffset = restoreConsumer.position(storePartition);
 
-        // reset the consumer to the written offset when we shutdown last time
-        long checkpointedOffset = 0;
-        if (checkpointedOffsets.containsKey(storePartition))
-            checkpointedOffset = checkpointedOffsets.get(storePartition);
-        restoreConsumer.seek(storePartition, checkpointedOffset);
+        // load the previously flushed state and restore from the checkpointed offset of the change log
+        // if it exists in the offset file; restore the state from the beginning of the change log otherwise
+        if (checkpointedOffsets.containsKey(storePartition)) {
+            restoreFunc.load();
+            restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
+        } else {
+            restoreConsumer.seekToBeginning(storePartition);
+        }
 
-        // restore its state from changelog records
-        boolean consumedToEnd = false;
-        while (!consumedToEnd) {
+        // restore its state from changelog records; while restoring the log end offset
+        // should not change since it is only written by this thread.
+        while (true) {
             for(ConsumerRecord<byte[], byte[]> record: restoreConsumer.poll(100)) {
-                if (record.offset() > endOffset) {
-                    consumedToEnd = true;
-                    break;
-                }
-
                 restoreFunc.apply(record.key(), record.value());
             }
 
+            if (restoreConsumer.position(storePartition) == endOffset) {
+                break;
+            } else if (restoreConsumer.position(storePartition) > endOffset) {
+                throw new IllegalStateException("Log end offset should not change while restoring");
+            }
         }
 
-        // record the restored offset for its partition
-        restoredOffsets.put(storePartition, restoreConsumer.position(storePartition));
+        // record the restored offset for its change log partition
+        long newOffset = restoreConsumer.position(storePartition);
+        restoredOffsets.put(storePartition, newOffset);
+
+        // un-subscribe the change log partition
         restoreConsumer.unsubscribe(storePartition);
     }
 
@@ -139,15 +172,23 @@ public class ProcessorStateManager {
             Map<TopicPartition, Long> checkpointOffsets = new HashMap<TopicPartition, Long>(restoredOffsets);
             for(String storeName: stores.keySet()) {
                 TopicPartition part = new TopicPartition(storeName, id);
-                if(ackedOffsets.containsKey(part))
-                    // store the last ack'd offset + 1 (the log position after restoration)
-                    checkpointOffsets.put(part, ackedOffsets.get(part) + 1);
+
+                // only checkpoint the offset to the offsets file if it is persistent;
+                if (stores.get(storeName).persistent()) {
+                    if(ackedOffsets.containsKey(part))
+                        // store the last ack'd offset + 1 (the log position after restoration)
+                        checkpointOffsets.put(part, ackedOffsets.get(part) + 1);
+                } else {
+                    checkpointOffsets.remove(part);
+                }
             }
 
-            // record that shutdown was clean
+            // write the checkpoint offset file to indicate clean shutdown
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }
+
+        // close the restore consumer
         restoreConsumer.close();
     }
 
