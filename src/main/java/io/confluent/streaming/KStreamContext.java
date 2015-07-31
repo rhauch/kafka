@@ -76,6 +76,12 @@ public interface KStreamContext {
   void restore(StateStore store, RestoreFunc restoreFunc);
 
   /**
+   * Registers the specified storage enging.
+   * @param store the storage engine
+   */
+  void register(StateStore store);
+
+  /**
    * Flush the local state of this context
    */
   void flush();

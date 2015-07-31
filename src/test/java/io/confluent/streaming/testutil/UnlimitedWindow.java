@@ -63,4 +63,9 @@ public class UnlimitedWindow<K, V> implements Window<K, V> {
   @Override
   public void restore() {
   }
+
+  @Override
+  public boolean persistent() {
+    return false;
+  }
 }

@@ -130,4 +130,10 @@ public class SlidingWindow<K, V> implements Window<K, V> {
   public void restore() {
     // TODO
   }
+
+  @Override
+  public boolean persistent() {
+    // TODO: should not be persistent, right?
+    return false;
+  }
 }
