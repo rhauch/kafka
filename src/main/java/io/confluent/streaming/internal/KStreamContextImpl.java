@@ -1,16 +1,17 @@
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStream;
-import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.KStreamException;
-import io.confluent.streaming.KStreamJob;
+import io.confluent.streaming.Processor;
+import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.StreamingConfig;
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
@@ -36,14 +37,13 @@ public class KStreamContextImpl implements KStreamContext {
   private static final Logger log = LoggerFactory.getLogger(KStreamContextImpl.class);
 
   public final int id;
-  private final KStreamJob job;
-  private final Ingestor ingestor;
-  private final RecordCollectorImpl collector;
+  final StreamGroup streamGroup;
+  final Ingestor ingestor;
 
+  private final RecordCollectorImpl collector;
   private final HashMap<String, KStreamSource<?, ?>> sourceStreams = new HashMap<>();
   private final HashMap<String, PartitioningInfo> partitioningInfos = new HashMap<>();
   private final TimestampExtractor timestampExtractor;
-  private final HashMap<String, StreamGroup> streamGroups = new HashMap<>();
   private final StreamingConfig streamingConfig;
   private final ProcessorConfig processorConfig;
   private final Metrics metrics;
@@ -53,14 +53,12 @@ public class KStreamContextImpl implements KStreamContext {
 
   @SuppressWarnings("unchecked")
   public KStreamContextImpl(int id,
-                            KStreamJob job,
-                            Ingestor ingestor,
-                            RecordCollectorImpl collector,
-                            StreamingConfig streamingConfig,
-                            ProcessorConfig processorConfig,
-                            Metrics metrics) {
+                         Ingestor ingestor,
+                         RecordCollectorImpl collector,
+                         StreamingConfig streamingConfig,
+                         ProcessorConfig processorConfig,
+                         Metrics metrics) {
     this.id = id;
-    this.job = job;
     this.ingestor = ingestor;
     this.collector = collector;
     this.streamingConfig = streamingConfig;
@@ -69,6 +67,7 @@ public class KStreamContextImpl implements KStreamContext {
     this.stateMgr = new ProcessorStateManager(id, new File(processorConfig.stateDir, Integer.toString(id)),
         new KafkaConsumer<>(streamingConfig.config(), null, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     this.metrics = metrics;
+    this.streamGroup = new StreamGroup(this, this.ingestor, new TimeBasedChooser(), this.timestampExtractor, this.processorConfig.bufferedRecordsPerPartition);
   }
 
   @Override
@@ -97,79 +96,6 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public KStream<?, ?> from(String... topics) {
-    return from(streamGroup(getNextGroupName()), null, null, topics);
-  }
-
-  @Override
-  public <K, V> KStream<K, V> from(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-    return from(streamGroup(getNextGroupName()), keyDeserializer, valDeserializer, topics);
-  }
-
-  private String getNextGroupName() {
-    return "StreamGroup-" + STREAM_GROUP_INDEX.getAndIncrement();
-  }
-
-  @SuppressWarnings("unchecked")
-  private <K, V> KStream<K, V> from(StreamGroup streamGroup, Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer, String... topics) {
-    ensureInitialization();
-
-    if (streamGroup == null) throw new IllegalArgumentException("unspecified stream group");
-
-    Set<String> fromTopics;
-
-    synchronized (this) {
-      // if topics not specified, use all the topics be default
-      if (topics == null || topics.length == 0) {
-        fromTopics = ingestor.topics();
-      } else {
-        fromTopics = Collections.unmodifiableSet(Util.mkSet(topics));
-      }
-
-      // iterate over the topics and check if the stream has already been created for them
-      for (String topic : fromTopics) {
-        if (!ingestor.topics().contains(topic))
-          throw new IllegalArgumentException("topic not subscribed: " + topic);
-
-        if (sourceStreams.containsKey(topic))
-          throw new IllegalArgumentException("another stream created with the same topic " + topic);
-      }
-
-      // create stream metadata
-      Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
-      for (String topic : fromTopics) {
-        PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
-
-        if (partitioningInfo == null) {
-          partitioningInfo = new PartitioningInfo(ingestor.numPartitions(topic));
-          this.partitioningInfos.put(topic, partitioningInfo);
-        }
-
-        topicPartitionInfos.put(topic, partitioningInfo);
-      }
-      KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, topicPartitionInfos);
-
-      // override the deserializer classes if specified
-      KStreamSource<K, V> stream = new KStreamSource<>(
-        streamMetadata,
-        this,
-        (Deserializer<K>) (keyDeserializer == null ? keyDeserializer() : keyDeserializer),
-        (Deserializer<V>) (valDeserializer == null ? valueDeserializer() : valDeserializer)
-      );
-
-      // update source stream map
-      for (String topic : fromTopics) {
-        sourceStreams.put(topic, stream);
-
-        TopicPartition partition = new TopicPartition(topic, id);
-        streamGroup.addPartition(partition, stream);
-      }
-
-      return stream;
-    }
-  }
-
-  @Override
   public RecordCollector recordCollector() {
     return collector;
   }
@@ -194,37 +120,12 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public StreamGroup streamGroup(String name) {
-    return streamGroup(name, new TimeBasedChooser());
-  }
-
-  @Override
-  public StreamGroup roundRobinStreamGroup(String name) {
-    return streamGroup(name, new RoundRobinChooser());
-  }
-
-  private StreamGroup streamGroup(String name, Chooser chooser) {
-    int desiredUnprocessedPerPartition = processorConfig.bufferedRecordsPerPartition;
-
-    synchronized (this) {
-      StreamGroup streamGroup = streamGroups.get(name);
-      if (streamGroup == null) {
-        streamGroup =
-          new StreamGroup(name, ingestor, chooser, timestampExtractor, desiredUnprocessedPerPartition);
-        streamGroups.put(name, streamGroup);
-      }
-      return streamGroup;
-    }
-  }
-
-  @Override
   public void restore(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
     stateMgr.registerAndRestore(store, restoreFunc);
   }
 
-  @Override
   public void ensureInitialization() {
     if (!initialized)
       throw new IllegalStateException("context initialization is already finished");
@@ -235,18 +136,73 @@ public class KStreamContextImpl implements KStreamContext {
     stateMgr.flush();
   }
 
-  public Collection<StreamGroup> streamGroups() {
-    return streamGroups.values();
+  @Override
+  public String topic() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
+
+    return this.streamGroup.record().topic();
   }
 
-  public void init() throws IOException {
+  @Override
+  public int partition() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as partition() should only be called while a record is processed");
+
+    return this.streamGroup.record().partition();
+  }
+
+  @Override
+  public long offset() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as offset() should only be called while a record is processed");
+
+    return this.streamGroup.record().offset();
+  }
+
+  @Override
+  public long timestamp() {
+    if (this.streamGroup.record() == null)
+      throw new IllegalStateException("this should not happen as timestamp() should only be called while a record is processed");
+
+    return this.streamGroup.record().timestamp;
+  }
+
+  @Override
+  public void send(String topic, Object key, Object value) {
+    collector.send(new ProducerRecord<>(topic, key, value));
+  }
+
+  @Override
+  public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) {
+    if (keySerializer == null || valSerializer == null)
+      throw new IllegalStateException("key and value serializers must be specified");
+
+    collector.send(new ProducerRecord<>(topic, key, value), keySerializer, valSerializer);
+  }
+
+  @Override
+  public void commit() {
+    this.streamGroup.commitOffset();
+  }
+
+  @Override
+  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
+    return streamGroup.getPunctuationScheduler(processor);
+  }
+
+  public void init(Collection<KStreamSource<?, ?>> streams) throws IOException {
     stateMgr.init();
-    job.init(this);
+
+    for (KStreamSource stream: streams) {
+      KStreamMetadata metadata = linkStreamToTopics(stream);
+
+      stream.bind(this, metadata);
+    }
 
     // add partition -> stream group mappings to the ingestor
     for (Map.Entry<String, KStreamSource<?,?>> entry : sourceStreams.entrySet()) {
       TopicPartition partition = new TopicPartition(entry.getKey(), id);
-      StreamGroup streamGroup = entry.getValue().metadata.streamGroup;
       ingestor.addPartitionStreamToGroup(streamGroup, partition);
     }
 
@@ -262,18 +218,60 @@ public class KStreamContextImpl implements KStreamContext {
     initialized = true;
   }
 
-  public void putConsumedOffsetsTo(Map<TopicPartition, Long> offsets) {
-    for (StreamGroup streamGroup : streamGroups.values())
-      offsets.putAll(streamGroup.consumedOffsets());
+  private KStreamMetadata linkStreamToTopics(KStreamSource stream) {
+    ensureInitialization();
+
+    Set<String> fromTopics;
+
+    synchronized (this) {
+      // if topics not specified, use all the topics be default
+      if (stream.topics == null || stream.topics.length == 0) {
+        fromTopics = ingestor.topics();
+      } else {
+        fromTopics = Collections.unmodifiableSet(Util.mkSet(stream.topics));
+      }
+
+      // iterate over the topics and check if the stream has already been created for them
+      for (String topic : fromTopics) {
+        if (!ingestor.topics().contains(topic))
+          throw new IllegalArgumentException("topic not subscribed: " + topic);
+
+        if (sourceStreams.containsKey(topic))
+          throw new IllegalArgumentException("another stream created with the same topic " + topic);
+      }
+
+      // create stream metadata
+      Map<String, PartitioningInfo> topicPartitionInfos = new HashMap<>();
+      for (String topic : fromTopics) {
+        PartitioningInfo partitioningInfo = this.partitioningInfos.get(topic);
+
+        if (partitioningInfo == null) {
+          partitioningInfo = new PartitioningInfo(ingestor.numPartitions(topic));
+          this.partitioningInfos.put(topic, partitioningInfo);
+        }
+
+        topicPartitionInfos.put(topic, partitioningInfo);
+      }
+
+      // update source stream map
+      for (String topic : fromTopics) {
+        sourceStreams.put(topic, stream);
+
+        TopicPartition partition = new TopicPartition(topic, id);
+        streamGroup.addPartition(partition, stream);
+      }
+
+      return new KStreamMetadata(topicPartitionInfos);
+    }
+  }
+
+  public Map<TopicPartition, Long> consumedOffsets() {
+    return streamGroup.consumedOffsets();
   }
 
   public void close() throws Exception {
     stateMgr.close(collector.offsets());
-
-    for (StreamGroup streamGroup : streamGroups.values())
-      streamGroup.close();
-
-    job.close();
+    streamGroup.close();
   }
 
 }
