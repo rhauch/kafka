@@ -5,13 +5,10 @@ package io.confluent.streaming;
  */
 public abstract class ProcessorKStreamJob<K, V> implements KStreamJob, Processor<K, V> {
 
-  protected KStreamContext streamContext;
-
   @SuppressWarnings("unchecked")
   @Override
-  public void init(KStreamContext context) {
-    this.streamContext = context;
-    context.from().process((Processor) this);
+  public void init(KStreamInitializer initializer) {
+    initializer.from().process((Processor) this);
   }
 
   @Override
