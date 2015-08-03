@@ -23,21 +23,19 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Arrays;
-import java.util.HashSet;
 import java.util.Set;
 
 /**
  * Kafka Streaming allows for performing continuous computation on input coming from one or more input topics and
  * sends output to zero or more output topics.
  * <p>
- * This processing is done by implementing the {@link KStreamJob} interface to specify the transformation. The
+ * This processing is defined by extending the {@link KStreamTopology} abstract class to specify the transformation operator topology. The
  * {@link KafkaStreaming} instance will be responsible for the lifecycle of these processors. It will instantiate and
  * start one or more of these processors to process the Kafka partitions assigned to this particular instance.
  * <p>
  * This streaming instance will co-ordinate with any other instances (whether in this same process, on other processes
  * on this machine, or on remote machines). These processes will divide up the work so that all partitions are being
- * consumed. If instances are added or die, the corresponding {@link KStreamJob} instances will be shutdown or
+ * consumed. If instances are added or die, the corresponding {@link KStream} instances will be shutdown or
  * started in the appropriate processes to balance processing load.
  * <p>
  * Internally the {@link KafkaStreaming} instance contains a normal {@link org.apache.kafka.clients.producer.KafkaProducer KafkaProducer}
@@ -50,7 +48,7 @@ import java.util.Set;
  *    StreamingConfig config = new StreamingConfig(props);
  *    config.processor(ExampleStreamProcessor.class);
  *    config.serialization(new StringSerializer(), new StringDeserializer());
- *    KafkaStreaming container = new KafkaStreaming(MyKStreamJob.class, config);
+ *    KafkaStreaming container = new KafkaStreaming(new MyKStreamTopology(), config);
  *    container.run();
  * </pre>
  *
@@ -72,23 +70,18 @@ public class KafkaStreaming implements Runnable {
     private final Set<String> topics;
 
 
-    public KafkaStreaming(Class<? extends KStreamJob> jobClass, StreamingConfig streamingConfig) {
+    public KafkaStreaming(KStreamTopology topology, StreamingConfig streamingConfig) {
 
         if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
 
         this.config = new ProcessorConfig(streamingConfig.config());
-        try {
-            this.topics = new HashSet<>(Arrays.asList(this.config.topics.split(",")));
-        }
-        catch (Exception e) {
-            throw new KStreamException("failed to get a topic list from the streaming config", e);
-        }
+        this.topics = topology.topics();
 
         Metrics metrics = new Metrics();
 
         // TODO: Fix this after the threading model is decided (also fix KStreamThread)
         this.threads = new KStreamThread[1];
-        threads[0] = new KStreamThread(jobClass, topics, streamingConfig, metrics);
+        threads[0] = new KStreamThread(topology, topics, streamingConfig, metrics);
     }
 
     /**
@@ -156,4 +149,5 @@ public class KafkaStreaming implements Runnable {
             }
         }
     }
+
 }

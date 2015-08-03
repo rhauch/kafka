@@ -3,6 +3,7 @@ package io.confluent.streaming.internal;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -23,7 +24,7 @@ public class StreamGroupTest {
   private static Serializer<Integer> serializer = new IntegerSerializer();
   private static Deserializer<Integer> deserializer = new IntegerDeserializer();
 
-  private static class MockKStreamSource extends KStreamSource {
+  private static class MockKStreamSource extends KStreamSource<Integer, Integer> {
 
     public int numReceived = 0;
     public ArrayList<Object> keys = new ArrayList<>();
@@ -32,7 +33,7 @@ public class StreamGroupTest {
     public ArrayList<Long> streamTimes = new ArrayList<>();
 
     public MockKStreamSource() {
-      super(null, new MockKStreamContext(serializer, deserializer));
+      super(null, deserializer, deserializer, new MockKStreamTopology());
     }
 
     @Override
@@ -53,7 +54,7 @@ public class StreamGroupTest {
     MockIngestor mockIngestor = new MockIngestor();
 
     StreamGroup streamGroup = new StreamGroup(
-      "group",
+      new MockKStreamContext(serializer, deserializer),
       mockIngestor,
       new TimeBasedChooser(),
       new TimestampExtractor() {

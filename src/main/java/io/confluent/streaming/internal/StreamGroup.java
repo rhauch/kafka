@@ -1,7 +1,7 @@
 package io.confluent.streaming.internal;
 
+import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
-import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.TimestampExtractor;
 import io.confluent.streaming.util.MinTimestampTracker;
 import io.confluent.streaming.util.ParallelExecutor;
@@ -20,7 +20,7 @@ import java.util.Map;
  */
 public class StreamGroup implements ParallelExecutor.Task {
 
-  private final String name;
+  private final KStreamContext context;
   private final Ingestor ingestor;
   private final Chooser chooser;
   private final TimestampExtractor timestampExtractor;
@@ -40,27 +40,23 @@ public class StreamGroup implements ParallelExecutor.Task {
 
   /**
    * Creates StreamGroup
-   * @param name the name of group
+   * @param context the task context
    * @param ingestor the instance of {@link Ingestor}
    * @param chooser the instance of {@link Chooser}
    * @param timestampExtractor the instance of {@link TimestampExtractor}
    * @param desiredUnprocessedPerPartition the target number of records kept in a queue for each topic
    */
-  StreamGroup(String name,
+  StreamGroup(KStreamContext context,
               Ingestor ingestor,
               Chooser chooser,
               TimestampExtractor timestampExtractor,
               int desiredUnprocessedPerPartition) {
-    this.name = name;
+    this.context = context;
     this.ingestor = ingestor;
     this.chooser = chooser;
     this.timestampExtractor = timestampExtractor;
     this.desiredUnprocessed = desiredUnprocessedPerPartition;
     this.consumedOffsets = new HashMap<>();
-  }
-
-  public String name() {
-    return name;
   }
 
   public StampedRecord record() { return currRecord; }
@@ -128,8 +124,8 @@ public class StreamGroup implements ParallelExecutor.Task {
           ConsumerRecord<byte[], byte[]> record = iterator.next();
 
           // deserialize the raw record, extract the timestamp and put into the queue
-          Deserializer<?> keyDeserializer = recordQueue.stream.keyDeserializer;
-          Deserializer<?> valDeserializer = recordQueue.stream.valueDeserializer;
+          Deserializer<?> keyDeserializer = recordQueue.stream.keyDeserializer();
+          Deserializer<?> valDeserializer = recordQueue.stream.valueDeserializer();
 
           Object key = keyDeserializer.deserialize(record.topic(), record.key());
           Object value = valDeserializer.deserialize(record.topic(), record.value());
@@ -153,12 +149,12 @@ public class StreamGroup implements ParallelExecutor.Task {
   }
 
   /**
-   * Returns a PunctuationScheduler
+   * Schedules a punctuation for the processor
    * @param processor the processor requesting scheduler
-   * @return PunctuationScheduler
+   * @param interval the interval in milliseconds
    */
-  public PunctuationScheduler getPunctuationScheduler(Processor<?, ?> processor) {
-    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+  public void schedule(Processor<?, ?> processor, long interval) {
+    punctuationQueue.schedule(new PunctuationSchedule(processor, interval));
   }
 
   /**
@@ -194,10 +190,10 @@ public class StreamGroup implements ParallelExecutor.Task {
       // need to be done altogether with offset commit atomically
       if (commitRequested) {
         // flush local state
-        recordQueue.stream.context().flush();
+        context.flush();
 
         // flush produced records in the downstream
-        recordQueue.stream.context().recordCollector().flush();
+        context.recordCollector().flush();
 
         // commit consumed offsets
         ingestor.commit(consumedOffsets());

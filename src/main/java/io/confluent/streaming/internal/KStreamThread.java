@@ -17,7 +17,7 @@
 
 package io.confluent.streaming.internal;
 
-import io.confluent.streaming.KStreamJob;
+import io.confluent.streaming.KStreamTopology;
 import io.confluent.streaming.StreamingConfig;
 import io.confluent.streaming.util.ParallelExecutor;
 import io.confluent.streaming.util.Util;
@@ -40,7 +40,6 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -56,7 +55,7 @@ public class KStreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(KStreamThread.class);
 
-    private final Class<? extends KStreamJob> jobClass;
+    private final KStreamTopology topology;
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
     private final ParallelExecutor parallelExecutor;
     private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
@@ -88,10 +87,10 @@ public class KStreamThread extends Thread {
     };
 
     @SuppressWarnings("unchecked")
-    public KStreamThread(Class<? extends KStreamJob> jobClass, Set<String> topics, StreamingConfig streamingConfig, Metrics metrics) {
+    public KStreamThread(KStreamTopology topology, Set<String> topics, StreamingConfig streamingConfig, Metrics metrics) {
         super();
         this.config = new ProcessorConfig(streamingConfig.config());
-        this.jobClass = jobClass;
+        this.topology = topology;
         this.streamingConfig = streamingConfig;
         this.metrics = metrics;
         this.streamingMetrics = new KafkaStreamingMetrics();
@@ -187,7 +186,7 @@ public class KStreamThread extends Thread {
         Map<TopicPartition, Long> commit = new HashMap<>();
         for (KStreamContextImpl context : kstreamContexts.values()) {
             context.flush();
-            context.putConsumedOffsetsTo(commit);
+            commit.putAll(context.consumedOffsets());
         }
 
         // check if commit is really needed, i.e. if all the offsets are already committed
@@ -227,27 +226,20 @@ public class KStreamThread extends Thread {
         HashSet<TopicPartition> partitions = new HashSet<>(assignment);
 
         for (TopicPartition partition : partitions) {
-            final Integer id = partition.partition();
-            KStreamContextImpl kstreamContext = kstreamContexts.get(id);
-            if (kstreamContext == null) {
-                KStreamJob job = (KStreamJob) Utils.newInstance(jobClass);
-
-                kstreamContext =
-                  new KStreamContextImpl(id, job, ingestor, collector, streamingConfig, config, metrics);
-
-                kstreamContexts.put(id, kstreamContext);
-
+            final Integer id = partition.partition(); // TODO: switch this to the group id
+            KStreamContextImpl context = kstreamContexts.get(id);
+            if (context == null) {
                 try {
-                    kstreamContext.init();
+                    context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
+                    context.init(topology.sourceStreams());
+
+                    kstreamContexts.put(id, context);
                 }
                 catch (Exception e) {
                     throw new KafkaException(e);
                 }
 
-                Collection<StreamGroup> streamGroups = kstreamContext.streamGroups();
-                for (StreamGroup streamGroup : streamGroups) {
-                    streamGroups.add(streamGroup);
-                }
+                streamGroups.add(context.streamGroup);
             }
         }
 
@@ -255,10 +247,10 @@ public class KStreamThread extends Thread {
     }
 
     private void removePartitions() {
-        for (KStreamContextImpl kstreamContext : kstreamContexts.values()) {
-            log.info("Removing stream context {}", kstreamContext.id());
+        for (KStreamContextImpl context : kstreamContexts.values()) {
+            log.info("Removing task context {}", context.id());
             try {
-                kstreamContext.close();
+                context.close();
             }
             catch (Exception e) {
                 throw new KafkaException(e);

@@ -1,8 +1,8 @@
 package io.confluent.streaming.internal;
 
 import io.confluent.streaming.*;
-import io.confluent.streaming.testutil.MockIngestor;
 import io.confluent.streaming.testutil.MockKStreamContext;
+import io.confluent.streaming.testutil.MockKStreamTopology;
 import io.confluent.streaming.testutil.TestProcessor;
 import io.confluent.streaming.testutil.UnlimitedWindow;
 import io.confluent.streaming.util.Util;
@@ -16,23 +16,9 @@ import static org.junit.Assert.assertTrue;
 
 public class KStreamJoinTest {
 
-  private Ingestor ingestor = new MockIngestor();
-
-  private StreamGroup streamGroup = new StreamGroup(
-    "group",
-    ingestor,
-    new TimeBasedChooser(),
-    new TimestampExtractor() {
-      public long extract(String topic, Object key, Object value) {
-        return 0L;
-      }
-    },
-    10
-  );
-
   private String topicName = "topic";
 
-  private KStreamMetadata streamMetadata = new KStreamMetadata(streamGroup, Collections.singletonMap(topicName, new PartitioningInfo(1)));
+  private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
   private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
     @Override
@@ -83,10 +69,10 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream1 = new KStreamSource<>(null, initializer);
+    stream2 = new KStreamSource<>(null, initializer);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -94,6 +80,11 @@ public class KStreamJoinTest {
 
     try {
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -168,10 +159,10 @@ public class KStreamJoinTest {
     TestProcessor<Integer, String> processor;
     String[] expected;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
+    stream1 = new KStreamSource<>(null, initializer);
+    stream2 = new KStreamSource<>(null, initializer);
     windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
     windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
@@ -179,6 +170,11 @@ public class KStreamJoinTest {
 
     try {
       windowed1.joinPrior(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -247,21 +243,27 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
-    mapped1 = stream1.map(keyValueMapper);
-    mapped2 = stream2.map(keyValueMapper);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -269,11 +271,21 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -281,11 +293,21 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.map(keyValueMapper);
+      mapped2 = stream2.map(keyValueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -303,21 +325,27 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
-    mapped1 = stream1.flatMap(keyValueMapper2);
-    mapped2 = stream2.flatMap(keyValueMapper2);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -325,11 +353,21 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -337,11 +375,21 @@ public class KStreamJoinTest {
     assertTrue(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMap(keyValueMapper2);
+      mapped2 = stream2.flatMap(keyValueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -359,21 +407,27 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
-    mapped1 = stream1.mapValues(valueMapper);
-    mapped2 = stream2.mapValues(valueMapper);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -381,11 +435,21 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -393,11 +457,21 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.mapValues(valueMapper);
+      mapped2 = stream2.mapValues(valueMapper);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -415,21 +489,27 @@ public class KStreamJoinTest {
     KStreamWindowed<Integer, String> windowed2;
     TestProcessor<Integer, String> processor;
 
-    KStreamContext context = new MockKStreamContext(null, null);
+    KStreamTopology initializer = new MockKStreamTopology();
     processor = new TestProcessor<>();
-    stream1 = new KStreamSource<>(streamMetadata, context, null, null);
-    stream2 = new KStreamSource<>(streamMetadata, context, null, null);
-    mapped1 = stream1.flatMapValues(valueMapper2);
-    mapped2 = stream2.flatMapValues(valueMapper2);
 
     boolean exceptionRaised;
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = stream1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -437,11 +517,21 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = stream2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
@@ -449,11 +539,21 @@ public class KStreamJoinTest {
     assertFalse(exceptionRaised);
 
     try {
+      stream1 = new KStreamSource<>(null, initializer);
+      stream2 = new KStreamSource<>(null, initializer);
+      mapped1 = stream1.flatMapValues(valueMapper2);
+      mapped2 = stream2.flatMapValues(valueMapper2);
+
       exceptionRaised = false;
       windowed1 = mapped1.with(new UnlimitedWindow<Integer, String>());
       windowed2 = mapped2.with(new UnlimitedWindow<Integer, String>());
 
       windowed1.join(windowed2, joiner).process(processor);
+
+      KStreamContext context = new MockKStreamContext(null, null);
+      stream1.bind(context, streamMetadata);
+      stream2.bind(context, streamMetadata);
+
     } catch (NotCopartitionedException e) {
       exceptionRaised = true;
     }
