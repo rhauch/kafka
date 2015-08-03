@@ -3,11 +3,9 @@ package io.confluent.streaming.testutil;
 
 import io.confluent.streaming.KStreamContext;
 import io.confluent.streaming.Processor;
-import io.confluent.streaming.PunctuationScheduler;
 import io.confluent.streaming.RecordCollector;
 import io.confluent.streaming.StateStore;
 import io.confluent.streaming.internal.PunctuationQueue;
-import io.confluent.streaming.internal.PunctuationSchedulerImpl;
 import io.confluent.streaming.kv.internals.RestoreFunc;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
@@ -72,8 +70,8 @@ public class MockKStreamContext implements KStreamContext {
   public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) { throw new UnsupportedOperationException("send() not supported."); }
 
   @Override
-  public PunctuationScheduler getPunctuationScheduler(Processor processor) {
-    return new PunctuationSchedulerImpl(punctuationQueue, processor);
+  public void schedule(Processor processor, long interval) {
+    throw new UnsupportedOperationException("schedule() not supported");
   }
 
   @Override
