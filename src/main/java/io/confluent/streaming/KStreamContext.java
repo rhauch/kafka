@@ -69,22 +69,15 @@ public interface KStreamContext {
   Metrics metrics();
 
   /**
-   * Restores the specified storage engine.
+   * Registers and possibly restores the specified storage engine.
    * @param store the storage engine
    */
-  void restore(StateStore store, RestoreFunc restoreFunc);
-
-  /**
-   * Registers the specified storage enging.
-   * @param store the storage engine
-   */
-  void register(StateStore store);
+  void register(StateStore store, RestoreFunc restoreFunc);
 
   /**
    * Flush the local state of this context
    */
   void flush();
-
 
   void send(String topic, Object key, Object value);
 

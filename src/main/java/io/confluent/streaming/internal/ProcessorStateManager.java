@@ -64,20 +64,22 @@ public class ProcessorStateManager {
     public void init() throws IOException {
         OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
         this.checkpointedOffsets.putAll(checkpoint.read());
+
+        // delete the checkpoint file after finish loading its stored offsets
         checkpoint.delete();
     }
 
-    public void register(StateStore store) {
+    public void register(StateStore store, RestoreFunc restoreFunc) {
         if (store.name().equals(CHECKPOINT_FILE_NAME))
             throw new IllegalArgumentException("Illegal store name: " + CHECKPOINT_FILE_NAME);
 
         if(this.stores.containsKey(store.name()))
             throw new IllegalArgumentException("Store " + store.name() + " has already been registered.");
 
+        // ---- register the store ---- //
+
         // check that the underlying change log topic exist or not
         if (restoreConsumer.listTopics().keySet().contains(store.name())) {
-            // TODO: if we know the total number of context ids then we can just check if the #.partitions match that number.
-            // my id must be in the partition list
             boolean partitionNotFound = true;
             for (PartitionInfo partitionInfo : restoreConsumer.partitionsFor(store.name())) {
                 if (partitionInfo.partition() == id) {
@@ -90,15 +92,13 @@ public class ProcessorStateManager {
                 throw new IllegalStateException("Store " + store.name() + "'s change log does not contain the partition for group " + id);
 
         } else {
-            // try to create the topic with the number of partitions equal to the total number of store instances.
-            // TODO: this is not possible yet since we do not know the total number of ids.
+            throw new IllegalStateException("Change log topic for store " + store.name() + " does not exist yet");
         }
 
-        // register store
         this.stores.put(store.name(), store);
-    }
 
-    public void restore(StateStore store, RestoreFunc restoreFunc) {
+        // ---- try to restore the state from change-log ---- //
+
         // subscribe to the store's partition
         TopicPartition storePartition = new TopicPartition(store.name(), id);
         if (!restoreConsumer.subscriptions().isEmpty()) {
@@ -114,7 +114,6 @@ public class ProcessorStateManager {
         // load the previously flushed state and restore from the checkpointed offset of the change log
         // if it exists in the offset file; restore the state from the beginning of the change log otherwise
         if (checkpointedOffsets.containsKey(storePartition)) {
-            restoreFunc.load();
             restoreConsumer.seek(storePartition, checkpointedOffsets.get(storePartition));
         } else {
             restoreConsumer.seekToBeginning(storePartition);
@@ -175,7 +174,7 @@ public class ProcessorStateManager {
 
                 // only checkpoint the offset to the offsets file if it is persistent;
                 if (stores.get(storeName).persistent()) {
-                    if(ackedOffsets.containsKey(part))
+                    if (ackedOffsets.containsKey(part))
                         // store the last ack'd offset + 1 (the log position after restoration)
                         checkpointOffsets.put(part, ackedOffsets.get(part) + 1);
                 } else {
@@ -183,7 +182,7 @@ public class ProcessorStateManager {
                 }
             }
 
-            // write the checkpoint offset file to indicate clean shutdown
+            // write the checkpoint file before closing, to indicate clean shutdown
             OffsetCheckpoint checkpoint = new OffsetCheckpoint(new File(this.baseDir, CHECKPOINT_FILE_NAME));
             checkpoint.write(checkpointOffsets);
         }

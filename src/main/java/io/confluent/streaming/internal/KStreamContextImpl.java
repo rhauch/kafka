@@ -115,17 +115,10 @@ public class KStreamContextImpl implements KStreamContext {
   }
 
   @Override
-  public void restore(StateStore store, RestoreFunc restoreFunc) {
+  public void register(StateStore store, RestoreFunc restoreFunc) {
     ensureInitialization();
 
-    stateMgr.restore(store, restoreFunc);
-  }
-
-  @Override
-  public void register(StateStore store) {
-    ensureInitialization();
-
-    stateMgr.register(store);
+    stateMgr.register(store, restoreFunc);
   }
 
   public void ensureInitialization() {
@@ -137,8 +130,6 @@ public class KStreamContextImpl implements KStreamContext {
   public void flush() {
     stateMgr.flush();
   }
-
-  @Override
   public String topic() {
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
