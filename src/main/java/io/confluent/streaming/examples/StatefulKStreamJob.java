@@ -27,7 +27,6 @@ public class StatefulKStreamJob implements Processor<String, Integer> {
     this.context.schedule(this, 1000);
 
     this.kvStore = new InMemoryKeyValueStore<>("local-state", context);
-    this.kvStore.restore(); // call restore inside processor.init
   }
 
   @Override

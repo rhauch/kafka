@@ -69,16 +69,10 @@ public interface KStreamContext {
   Metrics metrics();
 
   /**
-   * Restores the specified storage engine.
+   * Registers and possibly restores the specified storage engine.
    * @param store the storage engine
    */
-  void restore(StateStore store, RestoreFunc restoreFunc);
-
-  /**
-   * Registers the specified storage enging.
-   * @param store the storage engine
-   */
-  void register(StateStore store);
+  void register(StateStore store, RestoreFunc restoreFunc);
 
   /**
    * Ensures that the context is in the initialization phase where KStream topology can be constructed
