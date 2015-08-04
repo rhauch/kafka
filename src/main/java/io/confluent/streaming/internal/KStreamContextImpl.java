@@ -130,8 +130,6 @@ public class KStreamContextImpl implements KStreamContext {
   public void flush() {
     stateMgr.flush();
   }
-
-  @Override
   public String topic() {
     if (streamGroup.record() == null)
       throw new IllegalStateException("this should not happen as topic() should only be called while a record is processed");
@@ -146,7 +144,7 @@ public class KStreamContextImpl implements KStreamContext {
 
     return streamGroup.record().partition();
   }
-  
+
   @Override
   public long offset() {
     if (this.streamGroup.record() == null)

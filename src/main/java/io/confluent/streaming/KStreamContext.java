@@ -75,12 +75,9 @@ public interface KStreamContext {
   void register(StateStore store, RestoreFunc restoreFunc);
 
   /**
-   * Ensures that the context is in the initialization phase where KStream topology can be constructed
-   *
    * Flush the local state of this context
    */
   void flush();
-
 
   void send(String topic, Object key, Object value);
 
