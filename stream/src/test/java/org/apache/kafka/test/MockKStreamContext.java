@@ -1,15 +1,15 @@
 package org.apache.kafka.test;
 
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.Processor;
-import io.confluent.streaming.RecordCollector;
-import io.confluent.streaming.StateStore;
-import io.confluent.streaming.internal.PunctuationQueue;
-import io.confluent.streaming.kv.internals.RestoreFunc;
+import org.apache.kafka.stream.topology.Processor;
+import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.stream.RecordCollector;
+import org.apache.kafka.stream.RestoreFunc;
+import org.apache.kafka.stream.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.stream.internal.PunctuationQueue;
 
 import java.io.File;
 import java.util.Map;
@@ -56,9 +56,7 @@ public class MockKStreamContext implements KStreamContext {
   public Metrics metrics() { throw new UnsupportedOperationException("metrics() not supported."); }
 
   @Override
-  public void restore(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
-
-  public void register(StateStore store) { throw new UnsupportedOperationException("restore() not supported."); }
+  public void register(StateStore store, RestoreFunc func) { throw new UnsupportedOperationException("restore() not supported."); }
 
   @Override
   public void flush() { throw new UnsupportedOperationException("flush() not supported."); }

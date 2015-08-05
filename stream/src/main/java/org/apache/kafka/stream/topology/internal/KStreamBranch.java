@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.topology.internal;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.internal.Receiver;
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.Predicate;
@@ -26,7 +26,7 @@ class KStreamBranch<K, V> implements Receiver {
   }
 
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     for (KStreamSource<K, V> branch : branches) {
       branch.bind(context, metadata);
     }

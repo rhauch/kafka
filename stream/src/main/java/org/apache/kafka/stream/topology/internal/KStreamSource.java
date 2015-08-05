@@ -1,6 +1,6 @@
 package org.apache.kafka.stream.topology.internal;
 
-import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.stream.topology.KStreamTopology;
 
@@ -31,7 +31,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void bind(ProcessorContext context, KStreamMetadata metadata) {
+  public void bind(KStreamContext context, KStreamMetadata metadata) {
     if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
     if (valueDeserializer == null) valueDeserializer = (Deserializer<V>) context.valueDeserializer();
 

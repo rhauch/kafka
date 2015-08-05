@@ -1,14 +1,17 @@
 package org.apache.kafka.stream;
 
-import static org.junit.Assert.assertEquals;
-
-import io.confluent.streaming.testutil.MockKStreamContext;
-import io.confluent.streaming.testutil.MockKStreamTopology;
-import io.confluent.streaming.testutil.TestProcessor;
-import org.apache.kafka.clients.processor.KStreamContext;
+import org.apache.kafka.stream.internal.PartitioningInfo;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.internal.KStreamMetadata;
+import org.apache.kafka.stream.topology.internal.KStreamSource;
+import org.apache.kafka.test.MockKStreamTopology;
+import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.MockKStreamContext;
 import org.junit.Test;
 
 import java.util.Collections;
+
+import static org.junit.Assert.assertEquals;
 
 public class KStreamSourceTest {
 
@@ -20,7 +23,7 @@ public class KStreamSourceTest {
   public void testKStreamSource() {
 
     KStreamTopology initializer = new MockKStreamTopology();
-    TestProcessor<String, String> processor = new TestProcessor<>();
+    MockProcessor<String, String> processor = new MockProcessor<>();
 
     KStreamSource<String, String> stream = new KStreamSource<>(null, initializer);
     stream.process(processor);
