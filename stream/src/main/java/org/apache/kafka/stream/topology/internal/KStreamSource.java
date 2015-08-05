@@ -1,8 +1,8 @@
 package org.apache.kafka.stream.topology.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamTopology;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.stream.topology.KStreamTopology;
 
 import java.util.Arrays;
 import java.util.HashSet;
@@ -16,7 +16,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
   private Deserializer<K> keyDeserializer;
   private Deserializer<V> valueDeserializer;
 
-  String[] topics;
+  public String[] topics;
 
   public KStreamSource(String[] topics, KStreamTopology topology) {
     this(topics, null, null, topology);
@@ -31,7 +31,7 @@ public class KStreamSource<K, V> extends KStreamImpl<K, V> {
 
   @SuppressWarnings("unchecked")
   @Override
-  public void bind(KStreamContext context, KStreamMetadata metadata) {
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
     if (keyDeserializer == null) keyDeserializer = (Deserializer<K>) context.keyDeserializer();
     if (valueDeserializer == null) valueDeserializer = (Deserializer<V>) context.valueDeserializer();
 

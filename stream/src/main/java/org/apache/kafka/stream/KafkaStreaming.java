@@ -17,9 +17,10 @@
 
 package org.apache.kafka.stream;
 
-import io.confluent.streaming.internal.KStreamThread;
-import io.confluent.streaming.internal.ProcessorConfig;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.stream.internal.ProcessorConfig;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.internal.KStreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -17,10 +17,6 @@
 
 package org.apache.kafka.stream.topology.internal;
 
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.StreamingConfig;
-import io.confluent.streaming.util.ParallelExecutor;
-import io.confluent.streaming.util.Util;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceCallback;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
@@ -40,9 +36,15 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.stream.internal.IngestorImpl;
+import org.apache.kafka.stream.internal.ProcessorContextImpl;
 import org.apache.kafka.stream.internal.ProcessorConfig;
 import org.apache.kafka.stream.internal.RecordCollectorImpl;
 import org.apache.kafka.stream.internal.StreamGroup;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.util.ParallelExecutor;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -61,7 +63,7 @@ public class KStreamThread extends Thread {
     private final KStreamTopology topology;
     private final ArrayList<StreamGroup> streamGroups = new ArrayList<>();
     private final ParallelExecutor parallelExecutor;
-    private final Map<Integer, KStreamContextImpl> kstreamContexts = new HashMap<>();
+    private final Map<Integer, ProcessorContextImpl> kstreamContexts = new HashMap<>();
     private final IngestorImpl ingestor;
     private final RecordCollectorImpl collector;
     private final StreamingConfig streamingConfig;
@@ -187,7 +189,7 @@ public class KStreamThread extends Thread {
 
     private void commitAll(long now) {
         Map<TopicPartition, Long> commit = new HashMap<>();
-        for (KStreamContextImpl context : kstreamContexts.values()) {
+        for (ProcessorContextImpl context : kstreamContexts.values()) {
             context.flush();
             commit.putAll(context.consumedOffsets());
         }
@@ -213,11 +215,11 @@ public class KStreamThread extends Thread {
                         Integer id = Integer.parseInt(dir.getName());
                         if(!kstreamContexts.keySet().contains(id)) {
                             log.info("Deleting obsolete state directory {} after {} delay ms.", dir.getAbsolutePath(), config.stateCleanupDelay);
-                            Util.rm(dir);
+                            Utils.rm(dir);
                         }
                     } catch(NumberFormatException e) {
                         log.warn("Deleting unknown directory in state directory {}.", dir.getAbsolutePath());
-                        Util.rm(dir);
+                        Utils.rm(dir);
                     }
                 }
             }
@@ -230,10 +232,10 @@ public class KStreamThread extends Thread {
 
         for (TopicPartition partition : partitions) {
             final Integer id = partition.partition(); // TODO: switch this to the group id
-            KStreamContextImpl context = kstreamContexts.get(id);
+            ProcessorContextImpl context = kstreamContexts.get(id);
             if (context == null) {
                 try {
-                    context = new KStreamContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
+                    context = new ProcessorContextImpl(id, ingestor, collector, streamingConfig, config, metrics);
                     context.init(topology.sourceStreams());
 
                     kstreamContexts.put(id, context);
@@ -250,7 +252,7 @@ public class KStreamThread extends Thread {
     }
 
     private void removePartitions() {
-        for (KStreamContextImpl context : kstreamContexts.values()) {
+        for (ProcessorContextImpl context : kstreamContexts.values()) {
             log.info("Removing task context {}", context.id());
             try {
                 context.close();

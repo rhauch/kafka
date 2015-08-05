@@ -1,13 +1,13 @@
 package org.apache.kafka.stream.examples;
 
 import org.apache.kafka.stream.KStream;
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.KafkaStreaming;
-import io.confluent.streaming.KeyValue;
-import io.confluent.streaming.KeyValueMapper;
-import io.confluent.streaming.Predicate;
-import io.confluent.streaming.StreamingConfig;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.stream.KafkaStreaming;
+import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KeyValue;
+import org.apache.kafka.stream.topology.KeyValueMapper;
+import org.apache.kafka.stream.topology.Predicate;
 
 import java.util.Properties;
 

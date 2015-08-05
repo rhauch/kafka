@@ -5,7 +5,7 @@ package org.apache.kafka.clients.processor;
  */
 public interface Processor<K, V>  {
 
-  void init(KStreamContext context);
+  void init(ProcessorContext context);
 
   void process(K key, V value);
 
