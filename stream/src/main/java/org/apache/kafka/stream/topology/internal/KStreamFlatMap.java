@@ -1,9 +1,8 @@
 package org.apache.kafka.stream.topology.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.KeyValueMapper;
-import io.confluent.streaming.KeyValue;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.topology.KeyValue;
 import org.apache.kafka.stream.topology.KeyValueMapper;
 
 /**
@@ -19,7 +18,7 @@ class KStreamFlatMap<K, V, K1, V1> extends KStreamImpl<K, V> {
   }
 
   @Override
-  public void bind(KStreamContext context, KStreamMetadata metadata) {
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
     super.bind(context, KStreamMetadata.unjoinable());
   }
 

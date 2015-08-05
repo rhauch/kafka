@@ -1,7 +1,6 @@
 package org.apache.kafka.stream.topology.internal;
 
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.Predicate;
+import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.Predicate;
 
 /**

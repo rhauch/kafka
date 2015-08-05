@@ -1,10 +1,9 @@
 package org.apache.kafka.stream.topology.internal;
 
-import io.confluent.streaming.KStreamContext;
-import io.confluent.streaming.KStreamTopology;
-import io.confluent.streaming.NotCopartitionedException;
-import io.confluent.streaming.ValueJoiner;
-import io.confluent.streaming.Window;
+import org.apache.kafka.clients.processor.ProcessorContext;
+import org.apache.kafka.stream.NotCopartitionedException;
+import org.apache.kafka.stream.internal.Receiver;
+import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.ValueJoiner;
 import org.apache.kafka.stream.topology.Window;
 
@@ -63,7 +62,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   }
 
   @Override
-  public void bind(KStreamContext context, KStreamMetadata metadata) {
+  public void bind(ProcessorContext context, KStreamMetadata metadata) {
     super.bind(context, metadata);
 
     thisMetadata = metadata;
@@ -84,7 +83,7 @@ class KStreamJoin<K, V, V1, V2> extends KStreamImpl<K, V> {
   private Receiver getReceiverForOther() {
     return new Receiver() {
       @Override
-      public void bind(KStreamContext context, KStreamMetadata metadata) {
+      public void bind(ProcessorContext context, KStreamMetadata metadata) {
         otherMetadata = metadata;
         if (thisMetadata != null && !thisMetadata.isJoinCompatibleWith(otherMetadata)) throw new NotCopartitionedException();
       }
