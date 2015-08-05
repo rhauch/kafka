@@ -5,9 +5,9 @@
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
  * the License.  You may obtain a copy of the License at
- *
- *    http://www.apache.org/licenses/LICENSE-2.0
- *
+ * <p>
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * <p>
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
@@ -18,9 +18,9 @@
 package org.apache.kafka.stream;
 
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.stream.internal.ProcessorConfig;
+import org.apache.kafka.stream.internals.ProcessorConfig;
 import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.internal.KStreamThread;
+import org.apache.kafka.stream.topology.internals.KStreamThread;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -59,10 +59,10 @@ public class KafkaStreaming implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(KafkaStreaming.class);
 
     // Container States
-    private final int CREATED = 0;
-    private final int RUNNING = 1;
-    private final int STOPPING = 2;
-    private final int STOPPED = 3;
+    private static final int CREATED = 0;
+    private static final int RUNNING = 1;
+    private static final int STOPPING = 2;
+    private static final int STOPPED = 3;
     private int state = CREATED;
 
     private final ProcessorConfig config;
@@ -73,7 +73,8 @@ public class KafkaStreaming implements Runnable {
 
     public KafkaStreaming(KStreamTopology topology, StreamingConfig streamingConfig) {
 
-        if (streamingConfig.timestampExtractor() == null) throw new NullPointerException("timestamp extractor is missing");
+        if (streamingConfig.timestampExtractor() == null)
+            throw new NullPointerException("timestamp extractor is missing");
 
         this.config = new ProcessorConfig(streamingConfig.config());
         this.topics = topology.topics();
@@ -105,8 +106,7 @@ public class KafkaStreaming implements Runnable {
             while (state == RUNNING) {
                 try {
                     lock.wait();
-                }
-                catch (InterruptedException ex) {
+                } catch (InterruptedException ex) {
                     Thread.interrupted();
                 }
             }
@@ -143,8 +143,7 @@ public class KafkaStreaming implements Runnable {
             while (state == STOPPING) {
                 try {
                     lock.wait();
-                }
-                catch (InterruptedException ex) {
+                } catch (InterruptedException ex) {
                     Thread.interrupted();
                 }
             }
