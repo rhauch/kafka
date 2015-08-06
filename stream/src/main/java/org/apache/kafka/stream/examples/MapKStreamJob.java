@@ -34,7 +34,7 @@ public class MapKStreamJob extends KStreamTopology {
     @Override
     public void topology() {
 
-        // With overriden de-serializer
+        // With overridden de-serializer
         KStream stream1 = from(new StringDeserializer(), new StringDeserializer(), "topic1");
 
         stream1.map(new KeyValueMapper<String, Integer, String, String>() {
