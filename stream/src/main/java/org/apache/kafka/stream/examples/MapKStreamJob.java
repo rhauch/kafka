@@ -19,8 +19,8 @@ package org.apache.kafka.stream.examples;
 
 import org.apache.kafka.stream.KStream;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.stream.KafkaStreaming;
-import org.apache.kafka.stream.StreamingConfig;
+import org.apache.kafka.clients.processor.KafkaStreaming;
+import org.apache.kafka.clients.processor.internals.StreamingConfig;
 import org.apache.kafka.stream.topology.KStreamTopology;
 import org.apache.kafka.stream.topology.KeyValue;
 import org.apache.kafka.stream.topology.KeyValueMapper;

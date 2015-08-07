@@ -19,7 +19,7 @@ package org.apache.kafka.stream.topology;
 
 import org.apache.kafka.stream.KStreamContext;
 import org.apache.kafka.stream.util.FilteredIterator;
-import org.apache.kafka.stream.util.Stamped;
+import org.apache.kafka.clients.processor.internals.Stamped;
 
 import java.util.HashMap;
 import java.util.Iterator;
