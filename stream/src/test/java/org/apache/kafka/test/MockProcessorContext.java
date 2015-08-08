@@ -17,8 +17,8 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.stream.Processor;
-import org.apache.kafka.stream.KStreamContext;
+import org.apache.kafka.clients.processor.KafkaProcessor;
+import org.apache.kafka.clients.processor.ProcessorContext;
 import org.apache.kafka.clients.processor.RecordCollector;
 import org.apache.kafka.clients.processor.RestoreFunc;
 import org.apache.kafka.clients.processor.StateStore;
@@ -28,15 +28,13 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.clients.processor.internals.PunctuationQueue;
 
 import java.io.File;
-import java.util.Map;
 
-public class MockKStreamContext implements KStreamContext {
+public class MockProcessorContext implements ProcessorContext {
 
     Serializer serializer;
     Deserializer deserializer;
-    private final PunctuationQueue punctuationQueue = new PunctuationQueue();
 
-    public MockKStreamContext(Serializer<?> serializer, Deserializer<?> deserializer) {
+    public MockProcessorContext(Serializer<?> serializer, Deserializer<?> deserializer) {
         this.serializer = serializer;
         this.deserializer = deserializer;
     }
@@ -72,11 +70,6 @@ public class MockKStreamContext implements KStreamContext {
     }
 
     @Override
-    public Map<String, Object> getContext() {
-        throw new UnsupportedOperationException("getContext() not supported.");
-    }
-
-    @Override
     public File stateDir() {
         throw new UnsupportedOperationException("stateDir() not supported.");
     }
@@ -107,7 +100,7 @@ public class MockKStreamContext implements KStreamContext {
     }
 
     @Override
-    public void schedule(Processor processor, long interval) {
+    public void schedule(KafkaProcessor processor, long interval) {
         throw new UnsupportedOperationException("schedule() not supported");
     }
 

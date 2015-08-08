@@ -17,10 +17,9 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.stream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamContext;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.UnlimitedWindow;
 import org.junit.Test;
@@ -34,30 +33,26 @@ public class KStreamWindowedTest {
 
     private String topicName = "topic";
 
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
+    private KStreamTopology topology = new MockKStreamTopology();
+    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
+    private StringDeserializer valDeserializer = new StringDeserializer();
 
     @Test
     public void testWindowedStream() {
 
         final int[] expectedKeys = new int[]{0, 1, 2, 3};
 
-        KStreamSource<Integer, String> stream;
+        KStream<Integer, String> stream;
         Window<Integer, String> window;
-        KStreamTopology initializer = new MockKStreamTopology();
 
         window = new UnlimitedWindow<>();
-        stream = new KStreamSource<>(null, initializer);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
         stream.with(window);
-
-        boolean exceptionRaised = false;
-
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
 
         // two items in the window
 
         for (int i = 0; i < 2; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(1, countItem(window.find(0, 0L)));
@@ -68,7 +63,7 @@ public class KStreamWindowedTest {
         // previous two items + all items, thus two are duplicates, in the window
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "Y" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(2, countItem(window.find(0, 0L)));
