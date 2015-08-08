@@ -20,8 +20,6 @@ package org.apache.kafka.stream;
 import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.clients.processor.internals.PartitioningInfo;
-import org.apache.kafka.stream.internals.KStreamMetadata;
 import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
@@ -32,8 +30,6 @@ import org.junit.Test;
 import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
-import static org.junit.Assert.assertFalse;
-import static org.junit.Assert.assertTrue;
 
 public class KStreamJoinTest {
 
@@ -42,8 +38,6 @@ public class KStreamJoinTest {
     private KStreamTopology topology = new MockKStreamTopology();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
-
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
 
     private ValueJoiner<String, String, String> joiner = new ValueJoiner<String, String, String>() {
         @Override
@@ -82,8 +76,6 @@ public class KStreamJoinTest {
             }
         };
 
-
-    // TODO: initialize with context
 
     @Test
     public void testJoin() {
@@ -181,10 +173,15 @@ public class KStreamJoinTest {
 
         windowed1.joinPrior(windowed2, joiner).process(processor);
 
+        MockProcessorContext context = new MockProcessorContext(null, null);
+        topology.init(context);
+
         // push two items to the main stream. the other stream's window is empty
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i], i);
+            context.setTime(i);
+
+            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -193,7 +190,9 @@ public class KStreamJoinTest {
         // no corresponding item in the main window has a newer timestamp
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i], i + 1);
+            context.setTime(i + 1);
+
+            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -203,7 +202,9 @@ public class KStreamJoinTest {
         // push all items with newer timestamps to the main stream. this should produce two items.
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i], i + 2);
+            context.setTime(i + 2);
+
+            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -220,7 +221,9 @@ public class KStreamJoinTest {
 
         // push all items with older timestamps to the other stream. this should produce six items
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i], i);
+            context.setTime(i);
+
+            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());
@@ -230,311 +233,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < expected.length; i++) {
             assertEquals(expected[i], processor.processed.get(i));
         }
-
     }
 
-    @Test
-    public void testMap() {
-        KStream<Integer, String> stream1;
-        KStream<Integer, String> stream2;
-        KStream<Integer, String> mapped1;
-        KStream<Integer, String> mapped2;
-        KStreamWindowed<Integer, String> windowed1;
-        KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
-
-        processor = new MockProcessor<>();
-
-        boolean exceptionRaised;
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.map(keyValueMapper);
-            mapped2 = stream2.map(keyValueMapper);
-
-            exceptionRaised = false;
-            windowed1 = stream1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-            stream1.bind(context, streamMetadata);
-            stream2.bind(context, streamMetadata);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.map(keyValueMapper);
-            mapped2 = stream2.map(keyValueMapper);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = stream2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.map(keyValueMapper);
-            mapped2 = stream2.map(keyValueMapper);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-    }
-
-    @Test
-    public void testFlatMap() {
-        KStream<Integer, String> stream1;
-        KStream<Integer, String> stream2;
-        KStream<Integer, String> mapped1;
-        KStream<Integer, String> mapped2;
-        KStreamWindowed<Integer, String> windowed1;
-        KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
-
-        processor = new MockProcessor<>();
-
-        boolean exceptionRaised;
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMap(keyValueMapper2);
-            mapped2 = stream2.flatMap(keyValueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = stream1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMap(keyValueMapper2);
-            mapped2 = stream2.flatMap(keyValueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = stream2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMap(keyValueMapper2);
-            mapped2 = stream2.flatMap(keyValueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertTrue(exceptionRaised);
-    }
-
-    @Test
-    public void testMapValues() {
-        KStream<Integer, String> stream1;
-        KStream<Integer, String> stream2;
-        KStream<Integer, String> mapped1;
-        KStream<Integer, String> mapped2;
-        KStreamWindowed<Integer, String> windowed1;
-        KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
-
-        KStreamTopology initializer = new MockKStreamTopology();
-        processor = new MockProcessor<>();
-
-        boolean exceptionRaised;
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.mapValues(valueMapper);
-            mapped2 = stream2.mapValues(valueMapper);
-
-            exceptionRaised = false;
-            windowed1 = stream1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.mapValues(valueMapper);
-            mapped2 = stream2.mapValues(valueMapper);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = stream2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.mapValues(valueMapper);
-            mapped2 = stream2.mapValues(valueMapper);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-    }
-
-    @Test
-    public void testFlatMapValues() {
-        KStream<Integer, String> stream1;
-        KStream<Integer, String> stream2;
-        KStream<Integer, String> mapped1;
-        KStream<Integer, String> mapped2;
-        KStreamWindowed<Integer, String> windowed1;
-        KStreamWindowed<Integer, String> windowed2;
-        MockProcessor<Integer, String> processor;
-
-        KStreamTopology initializer = new MockKStreamTopology();
-        processor = new MockProcessor<>();
-
-        boolean exceptionRaised;
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMapValues(valueMapper2);
-            mapped2 = stream2.flatMapValues(valueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = stream1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMapValues(valueMapper2);
-            mapped2 = stream2.flatMapValues(valueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = stream2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-
-        try {
-            stream1 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            stream2 = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-            mapped1 = stream1.flatMapValues(valueMapper2);
-            mapped2 = stream2.flatMapValues(valueMapper2);
-
-            exceptionRaised = false;
-            windowed1 = mapped1.with(new UnlimitedWindow<>());
-            windowed2 = mapped2.with(new UnlimitedWindow<>());
-
-            windowed1.join(windowed2, joiner).process(processor);
-
-            KStreamContext context = new MockProcessorContext(null, null);
-
-        } catch (NotCopartitionedException e) {
-            exceptionRaised = true;
-        }
-
-        assertFalse(exceptionRaised);
-    }
-
+    // TODO: test for joinability
 }

@@ -25,7 +25,6 @@ import org.apache.kafka.clients.processor.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.clients.processor.internals.PunctuationQueue;
 
 import java.io.File;
 
@@ -34,9 +33,15 @@ public class MockProcessorContext implements ProcessorContext {
     Serializer serializer;
     Deserializer deserializer;
 
+    long timestamp = -1L;
+
     public MockProcessorContext(Serializer<?> serializer, Deserializer<?> deserializer) {
         this.serializer = serializer;
         this.deserializer = deserializer;
+    }
+
+    public void setTime(long timestamp) {
+        this.timestamp = timestamp;
     }
 
     @Override
@@ -126,7 +131,7 @@ public class MockProcessorContext implements ProcessorContext {
 
     @Override
     public long timestamp() {
-        throw new UnsupportedOperationException("timestamp() not supported.");
+        return this.timestamp;
     }
 
 }
