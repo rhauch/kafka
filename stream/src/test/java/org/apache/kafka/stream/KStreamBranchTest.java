@@ -30,7 +30,7 @@ import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-    private String topicName = "topic";
+    private String topic1 = "topic";
 
     private KStreamTopology topology = new MockKStreamTopology();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
@@ -65,7 +65,7 @@ public class KStreamBranchTest {
         KStream<Integer, String>[] branches;
         MockProcessor<Integer, String>[] processors;
 
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
@@ -81,29 +81,7 @@ public class KStreamBranchTest {
         }
 
         assertEquals(3, processors[0].processed.size());
-        assertEquals(1, processors[1].processed.size());
-        assertEquals(3, processors[2].processed.size());
-
-        // -----------------------------------------------
-
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
-        branches = stream.branch(isEven, isOdd, isMultipleOfThree);
-
-        assertEquals(3, branches.length);
-
-        processors = (MockProcessor<Integer, String>[]) Array.newInstance(MockProcessor.class, branches.length);
-        for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessor<>();
-            branches[i].process(processors[i]);
-        }
-
-        for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().receive(expectedKeys[i], "V" + expectedKeys[i]);
-        }
-
-        assertEquals(3, processors[0].processed.size());
-        assertEquals(4, processors[1].processed.size());
-        assertEquals(0, processors[2].processed.size());
+        assertEquals(2, processors[1].processed.size());
+        assertEquals(4, processors[2].processed.size());
     }
-
 }

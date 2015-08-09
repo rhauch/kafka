@@ -45,6 +45,12 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
+    public boolean joinable(ProcessorContext other) {
+        // TODO
+        return true;
+    }
+
+    @Override
     public int id() {
         return -1;
     }
