@@ -17,26 +17,24 @@
 
 package org.apache.kafka.stream;
 
-import org.apache.kafka.stream.internals.PartitioningInfo;
-import org.apache.kafka.stream.topology.KStreamTopology;
-import org.apache.kafka.stream.topology.Predicate;
-import org.apache.kafka.stream.topology.internals.KStreamMetadata;
-import org.apache.kafka.stream.topology.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamContext;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.stream.internals.KStreamSource;
 import org.apache.kafka.test.MockKStreamTopology;
 import org.apache.kafka.test.MockProcessor;
 import org.junit.Test;
 
 import java.lang.reflect.Array;
-import java.util.Collections;
 
 import static org.junit.Assert.assertEquals;
 
 public class KStreamBranchTest {
 
-    private String topicName = "topic";
+    private String topic1 = "topic";
 
-    private KStreamMetadata streamMetadata = new KStreamMetadata(Collections.singletonMap(topicName, new PartitioningInfo(1)));
+    private KStreamTopology topology = new MockKStreamTopology();
+    private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
+    private StringDeserializer valDeserializer = new StringDeserializer();
 
     @SuppressWarnings("unchecked")
     @Test
@@ -63,12 +61,11 @@ public class KStreamBranchTest {
 
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
-        KStreamTopology initializer = new MockKStreamTopology();
-        KStreamSource<Integer, String> stream;
+        KStream<Integer, String> stream;
         KStream<Integer, String>[] branches;
         MockProcessor<Integer, String>[] processors;
 
-        stream = new KStreamSource<>(null, initializer);
+        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topic1);
         branches = stream.branch(isEven, isMultipleOfThree, isOdd);
 
         assertEquals(3, branches.length);
@@ -80,33 +77,11 @@ public class KStreamBranchTest {
         }
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
+            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(3, processors[0].processed.size());
-        assertEquals(1, processors[1].processed.size());
-        assertEquals(3, processors[2].processed.size());
-
-        stream = new KStreamSource<>(null, initializer);
-        branches = stream.branch(isEven, isOdd, isMultipleOfThree);
-
-        assertEquals(3, branches.length);
-
-        processors = (MockProcessor<Integer, String>[]) Array.newInstance(MockProcessor.class, branches.length);
-        for (int i = 0; i < branches.length; i++) {
-            processors[i] = new MockProcessor<>();
-            branches[i].process(processors[i]);
-        }
-
-        KStreamContext context = new MockKStreamContext(null, null);
-        stream.bind(context, streamMetadata);
-        for (int i = 0; i < expectedKeys.length; i++) {
-            stream.receive(expectedKeys[i], "V" + expectedKeys[i], 0L);
-        }
-
-        assertEquals(3, processors[0].processed.size());
-        assertEquals(4, processors[1].processed.size());
-        assertEquals(0, processors[2].processed.size());
+        assertEquals(2, processors[1].processed.size());
+        assertEquals(4, processors[2].processed.size());
     }
-
 }

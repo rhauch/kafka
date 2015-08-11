@@ -17,10 +17,14 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.stream.topology.KStreamTopology;
+import org.apache.kafka.stream.KStreamTopology;
 
 public class MockKStreamTopology extends KStreamTopology {
+    public MockKStreamTopology() {
+        super(null);
+    }
+
     @Override
-    public void topology() {
+    public void build() {
     }
 }

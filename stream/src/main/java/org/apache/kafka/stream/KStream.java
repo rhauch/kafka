@@ -17,15 +17,9 @@
 
 package org.apache.kafka.stream;
 
+import org.apache.kafka.clients.processor.KafkaProcessor;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
-import org.apache.kafka.stream.topology.KStreamWindowed;
-import org.apache.kafka.stream.topology.KeyValueMapper;
-import org.apache.kafka.stream.topology.Predicate;
-import org.apache.kafka.stream.topology.Processor;
-import org.apache.kafka.stream.topology.Transformer;
-import org.apache.kafka.stream.topology.ValueMapper;
-import org.apache.kafka.stream.topology.Window;
 
 /**
  * KStream is an abstraction of a stream of key-value pairs.
@@ -56,7 +50,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K1, V1, K, V> mapper);
+    <K1, V1> KStream<K1, V1> map(KeyValueMapper<K, V, K1, V1> mapper);
 
     /**
      * Creates a new stream by transforming valuesa by a mapper to all values of this stream
@@ -65,7 +59,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <V1> KStream<K, V1> mapValues(ValueMapper<V1, V> mapper);
+    <V1> KStream<K, V1> mapValues(ValueMapper<V, V1> mapper);
 
     /**
      * Creates a new stream by applying a mapper to all elements of this stream and using the values in the resulting Iterable
@@ -75,7 +69,7 @@ public interface KStream<K, V> {
      * @param <V1>   the value type of the new stream
      * @return KStream
      */
-    <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K1, ? extends Iterable<V1>, K, V> mapper);
+    <K1, V1> KStream<K1, V1> flatMap(KeyValueMapper<K, V, K1, ? extends Iterable<V1>> mapper);
 
     /**
      * Creates a new stream by applying a mapper to all values of this stream and using the values in the resulting Iterable
@@ -84,7 +78,7 @@ public interface KStream<K, V> {
      * @param <V1>      the value type of the new stream
      * @return KStream
      */
-    <V1> KStream<K, V1> flatMapValues(ValueMapper<? extends Iterable<V1>, V> processor);
+    <V1> KStream<K, V1> flatMapValues(ValueMapper<V, ? extends Iterable<V1>> processor);
 
     /**
      * Creates a new windowed stream using a specified window instance.
@@ -108,7 +102,7 @@ public interface KStream<K, V> {
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
      * The created stream is added to the default synchronization group.
-     * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+     * This is equivalent to calling sendTo(topic) and from(topic).
      *
      * @param topic the topic name
      * @return KStream
@@ -118,7 +112,7 @@ public interface KStream<K, V> {
     /**
      * Sends key-value to a topic, also creates a new stream from the topic.
      * The created stream is added to the default synchronization group.
-     * This is equivalent to calling sendTo(topic) and KStreamContext.from(topic).
+     * This is equivalent to calling sendTo(topic) and from(topic).
      *
      * @param topic           the topic name
      * @param keySerializer   key serializer used to send key-value pairs,
@@ -158,13 +152,5 @@ public interface KStream<K, V> {
      *
      * @param processor the instance of Processor
      */
-    void process(Processor<K, V> processor);
-
-    /**
-     * Transform all elements in this stream by applying a tranformer.
-     *
-     * @param transformer the instance of Transformer
-     */
-    <K1, V1> KStream<K1, V1> transform(Transformer<K1, V1, K, V> transformer);
-
+    <K1, V1> KStream<K1, V1> process(KafkaProcessor<K, V, K1, V1> processor);
 }
