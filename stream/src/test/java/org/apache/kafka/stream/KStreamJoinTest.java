@@ -103,7 +103,7 @@ public class KStreamJoinTest {
         // push two items to the main stream. the other stream's window is empty
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -111,7 +111,7 @@ public class KStreamJoinTest {
         // push two items to the other stream. the main stream's window has two items
 
         for (int i = 0; i < 2; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -127,7 +127,7 @@ public class KStreamJoinTest {
         // push all items to the main stream. this should produce two items.
 
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -144,7 +144,7 @@ public class KStreamJoinTest {
 
         // push all items to the other stream. this should produce 6 items
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());
@@ -184,7 +184,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < 2; i++) {
             context.setTime(i);
 
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -195,7 +195,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < 2; i++) {
             context.setTime(i + 1);
 
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(0, processor.processed.size());
@@ -207,7 +207,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             context.setTime(i + 2);
 
-            ((KStreamSource<Integer, String>) stream1).source().receive(expectedKeys[i], "X" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream1).source().process(expectedKeys[i], "X" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -226,7 +226,7 @@ public class KStreamJoinTest {
         for (int i = 0; i < expectedKeys.length; i++) {
             context.setTime(i);
 
-            ((KStreamSource<Integer, String>) stream2).source().receive(expectedKeys[i], "Y" + expectedKeys[i]);
+            ((KStreamSource<Integer, String>) stream2).source().process(expectedKeys[i], "Y" + expectedKeys[i]);
         }
 
         assertEquals(6, processor.processed.size());
