@@ -15,27 +15,32 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.ProcessorMetadata;
+import org.apache.kafka.streaming.kstream.KeyValue;
+import org.apache.kafka.streaming.kstream.KeyValueFlatMap;
 
-import java.util.ArrayList;
+class KStreamFlatMap<K1, V1, K2, V2> extends KafkaProcessor<K1, V1> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private final KeyValueFlatMap<K1, V1, K2, V2> mapper;
 
-    public MockProcessor() {
-        super("MOCK");
+    @SuppressWarnings("unchecked")
+    KStreamFlatMap(ProcessorMetadata metadata) {
+        super(metadata);
+
+        if (this.metadata() == null)
+            throw new IllegalStateException("ProcessorMetadata should be specified.");
+
+        this.mapper = (KeyValueFlatMap<K1, V1, K2, V2>) metadata.value();
     }
 
     @Override
     public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+        Iterable<KeyValue<K2, V2>> pairs = mapper.apply(key, value);
+        for (KeyValue<K2, V2> pair : pairs) {
+            context.forward(pair.key, pair.value);
+        }
     }
 }

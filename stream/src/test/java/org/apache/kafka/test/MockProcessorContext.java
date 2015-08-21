@@ -17,11 +17,11 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.clients.processor.KafkaProcessor;
-import org.apache.kafka.clients.processor.ProcessorContext;
-import org.apache.kafka.clients.processor.RecordCollector;
-import org.apache.kafka.clients.processor.RestoreFunc;
-import org.apache.kafka.clients.processor.StateStore;
+import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.RecordCollector;
+import org.apache.kafka.streaming.processor.RestoreFunc;
+import org.apache.kafka.streaming.processor.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;

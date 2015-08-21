@@ -15,27 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.kstream.internals;
 
 import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.Processor;
+import org.apache.kafka.streaming.processor.ProcessorMetadata;
 
-import java.util.ArrayList;
+public class KStreamProcessor<K, V> extends KafkaProcessor<K, V> {
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    private final Processor<K, V> processor;
 
-    public MockProcessor() {
-        super("MOCK");
+    @SuppressWarnings("unchecked")
+    public KStreamProcessor(ProcessorMetadata metadata) {
+        super(metadata);
+
+        if (this.metadata() != null)
+            throw new IllegalStateException("ProcessorMetadata should be null.");
+
+        this.processor = (Processor<K, V>) metadata.value();
     }
 
     @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public void process(K key, V value) {
+        processor.process(key, value);
     }
 }

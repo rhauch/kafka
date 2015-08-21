@@ -17,25 +17,31 @@
 
 package org.apache.kafka.test;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+import org.apache.kafka.streaming.processor.internals.SourceNode;
+import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.ArrayList;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+public class MockSourceNode<K, V> extends SourceNode<K, V> {
 
-    public MockProcessor() {
-        super("MOCK");
+    public Deserializer<? extends K> keyDeserializer;
+    public Deserializer<? extends V> valDeserializer;
+
+    public int numReceived = 0;
+    public ArrayList<K> keys = new ArrayList<>();
+    public ArrayList<V> values = new ArrayList<>();
+
+    public MockSourceNode(Deserializer<? extends K> keyDeserializer, Deserializer<? extends V> valDeserializer) {
+        super(keyDeserializer, valDeserializer);
+
+        this.keyDeserializer = keyDeserializer;
+        this.valDeserializer = valDeserializer;
     }
 
     @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
-    }
-
-    @Override
-    public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+    public void process(K key, V value) {
+        this.numReceived++;
+        this.keys.add(key);
+        this.values.add(value);
     }
 }

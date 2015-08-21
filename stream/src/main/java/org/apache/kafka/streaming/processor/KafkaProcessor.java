@@ -15,27 +15,36 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.test;
+package org.apache.kafka.streaming.processor;
 
-import org.apache.kafka.streaming.processor.KafkaProcessor;
+public abstract class KafkaProcessor<K, V> implements Processor<K, V>, Punctuator {
 
-import java.util.ArrayList;
+    private final ProcessorMetadata metadata;
 
-public class MockProcessor<K1, V1> extends KafkaProcessor<K1, V1, Object, Object> {
-    public final ArrayList<String> processed = new ArrayList<>();
-    public final ArrayList<Long> punctuated = new ArrayList<>();
+    protected ProcessorContext context;
 
-    public MockProcessor() {
-        super("MOCK");
+    public KafkaProcessor(ProcessorMetadata metadata) {
+        this.metadata = metadata;
     }
 
-    @Override
-    public void process(K1 key, V1 value) {
-        processed.add(key + ":" + value);
+    public ProcessorMetadata metadata() {
+        return metadata;
     }
+
+    /* Following functions can be overridden by users */
 
     @Override
     public void punctuate(long streamTime) {
-        punctuated.add(streamTime);
+        // do nothing
+    }
+
+    @Override
+    public void init(ProcessorContext context) {
+        this.context = context;
+    }
+
+    @Override
+    public void close() {
+        // do nothing
     }
 }
