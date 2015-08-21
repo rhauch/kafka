@@ -88,7 +88,13 @@
 		<subpackage name="producer">
 			<allow pkg="org.apache.kafka.clients.producer" />
 		</subpackage>
-	
+
+		<subpackage name="processor">
+			<allow pkg="org.apache.kafka.clients.producer" />
+			<allow pkg="org.apache.kafka.clients.consumer" />
+			<allow pkg="org.apache.kafka.clients.processor" />
+		</subpackage>
+
 		<subpackage name="tools">
 			<allow pkg="org.apache.kafka.clients.producer" />
 			<allow pkg="org.apache.kafka.clients.consumer" />
@@ -102,8 +108,9 @@
 		<allow pkg="org.apache.kafka.test"/>
 		<allow pkg="org.apache.kafka.clients.producer" exact-match="true"/>
 		<allow pkg="org.apache.kafka.clients.consumer" exact-match="true"/>
+		<allow pkg="org.apache.kafka.clients.processor"/>
 
-		<allow pkg="org.apache.kafka.stream"/>
+		<allow pkg="org.apache.kafka.streaming"/>
 
 		<subpackage name="state">
 			<allow pkg="org.rocksdb" />
