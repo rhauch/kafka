@@ -19,7 +19,6 @@ package org.apache.kafka.test;
 
 import org.apache.kafka.streaming.processor.Processor;
 import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RecordCollector;
 import org.apache.kafka.streaming.processor.RestoreFunc;
 import org.apache.kafka.streaming.processor.StateStore;
 import org.apache.kafka.common.metrics.Metrics;
@@ -76,11 +75,6 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public RecordCollector recordCollector() {
-        throw new UnsupportedOperationException("recordCollector() not supported.");
-    }
-
-    @Override
     public File stateDir() {
         throw new UnsupportedOperationException("stateDir() not supported.");
     }
@@ -96,23 +90,13 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
-    public void flush() {
-        throw new UnsupportedOperationException("flush() not supported.");
-    }
-
-    @Override
-    public void send(String topic, Object key, Object value) {
-        throw new UnsupportedOperationException("send() not supported.");
-    }
-
-    @Override
-    public void send(String topic, Object key, Object value, Serializer<Object> keySerializer, Serializer<Object> valSerializer) {
-        throw new UnsupportedOperationException("send() not supported.");
-    }
-
-    @Override
     public void schedule(Processor processor, long interval) {
         throw new UnsupportedOperationException("schedule() not supported");
+    }
+
+    @Override
+    public <K, V> void forward(K key, V value) {
+        throw new UnsupportedOperationException("forward() not supported");
     }
 
     @Override
