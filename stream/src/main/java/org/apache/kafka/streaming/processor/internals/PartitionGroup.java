@@ -22,8 +22,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Deserializer;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.PriorityQueue;
+import java.util.Set;
 
 /**
  * A PartitionGroup is composed from a set of partitions.
@@ -34,12 +36,13 @@ public class PartitionGroup {
 
     private final PriorityQueue<RecordQueue> queuesByTime;
 
-    private volatile int totalBuffered;
+    // since task is thread-safe, we do not need to synchronize on local variables
+    private int totalBuffered;
 
     public PartitionGroup(Map<TopicPartition, RecordQueue> partitionQueues) {
-
-        this.partitionQueues = partitionQueues;
         this.queuesByTime = new PriorityQueue<>(new Comparator<RecordQueue>() {
+
+            @Override
             public int compare(RecordQueue queue1, RecordQueue queue2) {
                 long time1 = queue1.timestamp();
                 long time2 = queue2.timestamp();
@@ -50,28 +53,42 @@ public class PartitionGroup {
             }
         });
 
-        totalBuffered = 0;
+        this.partitionQueues = partitionQueues;
+
+        this.totalBuffered = 0;
     }
 
     /**
-     * Get the next record from the partition with the lowest timestamp to be processed
+     * Get one record from the specified partition queue
      */
-    public StampedRecord nextRecord() {
+    public StampedRecord getRecord(RecordQueue queue) {
+        // get the first record from this queue.
+        StampedRecord record = queue.poll();
 
-        // Get the partition with the lowest timestamp.
-        RecordQueue recordQueue = queuesByTime.poll();
+        // update the partition's timestamp and re-order it against other partitions.
 
-        // Get the first record from this partition's queue.
-        StampedRecord record = recordQueue.next();
+        queuesByTime.remove(queue);
+
+        if (queue.size() > 0) {
+            queuesByTime.offer(queue);
+        }
 
         totalBuffered--;
 
-        // Update the partition's timestamp and re-order it with other partitions.
-        if (recordQueue.size() > 0) {
-            queuesByTime.offer(recordQueue);
-        }
-
         return record;
+    }
+
+    /**
+     * Get the next partition queue that has the lowest timestamp to process
+     */
+    public RecordQueue nextQueue() {
+        // get the partition with the lowest timestamp
+        RecordQueue recordQueue = queuesByTime.peek();
+
+        if (recordQueue == null)
+            throw new KafkaException("No records have ever been added to this partition group yet.");
+
+        return recordQueue;
     }
 
     /**
@@ -93,8 +110,9 @@ public class PartitionGroup {
         totalBuffered++;
 
         // add this record queue to be considered for processing in the future if it was empty before
-        if (wasEmpty)
+        if (wasEmpty) {
             queuesByTime.offer(recordQueue);
+        }
     }
 
     public Deserializer<?> keyDeserializer(TopicPartition partition) {
@@ -115,13 +133,20 @@ public class PartitionGroup {
         return recordQueue.source().valDeserializer;
     }
 
-    public long timestamp() {
+    public Set<TopicPartition> partitions() {
+        return partitionQueues.keySet();
+    }
 
-        // return the timestamp of this partition-group as the smallest partition timestamp
-        if (queuesByTime.isEmpty())
+    /**
+     * Return the timestamp of this partition group as the smallest
+     * partition timestamp among all its partitions
+     */
+    public long timestamp() {
+        if (queuesByTime.isEmpty()) {
             return -1L;
-        else
+        } else {
             return queuesByTime.peek().timestamp();
+        }
     }
 
     public int numbuffered(TopicPartition partition) {
@@ -135,5 +160,10 @@ public class PartitionGroup {
 
     public int numbuffered() {
         return totalBuffered;
+    }
+
+    public void close() {
+        queuesByTime.clear();
+        partitionQueues.clear();
     }
 }

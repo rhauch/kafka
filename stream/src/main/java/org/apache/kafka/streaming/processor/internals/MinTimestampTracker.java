@@ -20,15 +20,14 @@ package org.apache.kafka.streaming.processor.internals;
 import java.util.LinkedList;
 
 /**
- * MinTimestampTracker is a helper class for a sliding window implementation.
- * It is assumed that elements are added or removed in a FIFO manner.
- * It maintains the minimum timestamp of stamped elements that were added but not yet removed.
+ * MinTimestampTracker implements {@link TimestampTracker} that maintains the min
+ * timestamp of the maintained stamped elements.
  */
 public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
-    private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<Stamped<E>>();
+    private final LinkedList<Stamped<E>> descendingSubsequence = new LinkedList<>();
 
-    public void addStampedElement(Stamped<E> elem) {
+    public void addElement(Stamped<E> elem) {
         if (elem == null) throw new NullPointerException();
 
         Stamped<E> minElem = descendingSubsequence.peekLast();
@@ -39,7 +38,7 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
         descendingSubsequence.offerLast(elem);
     }
 
-    public void removeStampedElement(Stamped<E> elem) {
+    public void removeElement(Stamped<E> elem) {
         if (elem != null && descendingSubsequence.peekFirst() == elem)
             descendingSubsequence.removeFirst();
     }
@@ -50,9 +49,11 @@ public class MinTimestampTracker<E> implements TimestampTracker<E> {
 
     public long get() {
         Stamped<E> stamped = descendingSubsequence.peekFirst();
-        if (stamped == null) return -1L;
 
-        return stamped.timestamp;
+        if (stamped == null)
+            return TimestampTracker.NOT_KNOWN;
+        else
+            return stamped.timestamp;
     }
 
 }

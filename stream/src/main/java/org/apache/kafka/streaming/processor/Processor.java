@@ -23,5 +23,7 @@ public interface Processor<K, V> {
 
     void process(K key, V value);
 
+    void punctuate(long streamTime);
+
     void close();
 }

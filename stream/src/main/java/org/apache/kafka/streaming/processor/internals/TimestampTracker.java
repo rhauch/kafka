@@ -19,30 +19,32 @@ package org.apache.kafka.streaming.processor.internals;
 
 /**
  * TimestampTracker is a helper class for a sliding window implementation.
- * It is assumed that elements are added or removed in a FIFO manner.
- * It maintains the timestamp, like the min timestamp, the max timestamp, etc. of stamped elements
- * that were added but not yet removed.
+ * It is assumed that stamped elements are added or removed in a FIFO manner.
+ * It maintains the timestamp, such as the min timestamp, the max timestamp, etc.
+ * of stamped elements that were added but not yet removed.
  */
 public interface TimestampTracker<E> {
+
+    static final long NOT_KNOWN = -1L;
 
     /**
      * Adds a stamped elements to this tracker.
      *
      * @param elem the added element
      */
-    void addStampedElement(Stamped<E> elem);
+    void addElement(Stamped<E> elem);
 
     /**
      * Removed a stamped elements to this tracker.
      *
      * @param elem the removed element
      */
-    void removeStampedElement(Stamped<E> elem);
+    void removeElement(Stamped<E> elem);
 
     /**
-     * Returns the timestamp
+     * Returns the current tracked timestamp
      *
-     * @return timestamp, or -1L when empty
+     * @return timestamp, or {@link #NOT_KNOWN} when empty
      */
     long get();
 
