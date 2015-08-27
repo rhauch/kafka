@@ -15,19 +15,11 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.streaming.processor;
+package org.apache.kafka.streaming.kstream;
 
-public class ProcessorMetadata {
+public interface WindowDef<K, V> {
 
-    private String name;
-    private Object value;
+    String name();
 
-    public ProcessorMetadata(String name, Object value) {
-        this.name = name;
-        this.value = value;
-    }
-
-    public Object value() {
-        return value;
-    }
+    Window<K, V> build();
 }
