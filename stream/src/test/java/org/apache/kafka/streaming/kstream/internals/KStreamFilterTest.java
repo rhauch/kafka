@@ -22,9 +22,8 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.streaming.kstream.KStream;
 import org.apache.kafka.streaming.kstream.KStreamBuilder;
 import org.apache.kafka.streaming.kstream.Predicate;
-import org.apache.kafka.streaming.kstream.internals.KStreamSource;
-import org.apache.kafka.test.MockKStreamBuilder;
-import org.apache.kafka.test.MockProcessor;
+import org.apache.kafka.test.KStreamTestDriver;
+import org.apache.kafka.test.MockProcessorDef;
 
 import org.junit.Test;
 
@@ -34,7 +33,6 @@ public class KStreamFilterTest {
 
     private String topicName = "topic";
 
-    private KStreamBuilder topology = new MockKStreamBuilder();
     private IntegerDeserializer keyDeserializer = new IntegerDeserializer();
     private StringDeserializer valDeserializer = new StringDeserializer();
 
@@ -47,17 +45,19 @@ public class KStreamFilterTest {
 
     @Test
     public void testFilter() {
+        KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessor<Integer, String> processor;
+        MockProcessorDef<Integer, String> processor;
 
-        processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        processor = new MockProcessorDef<>();
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.filter(isMultipleOfThree).process(processor);
 
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(2, processor.processed.size());
@@ -65,17 +65,19 @@ public class KStreamFilterTest {
 
     @Test
     public void testFilterOut() {
+        KStreamBuilder builder = new KStreamBuilder();
         final int[] expectedKeys = new int[]{1, 2, 3, 4, 5, 6, 7};
 
         KStream<Integer, String> stream;
-        MockProcessor<Integer, String> processor;
+        MockProcessorDef<Integer, String> processor;
 
-        processor = new MockProcessor<>();
-        stream = topology.<Integer, String>from(keyDeserializer, valDeserializer, topicName);
+        processor = new MockProcessorDef<>();
+        stream = builder.from(keyDeserializer, valDeserializer, topicName);
         stream.filterOut(isMultipleOfThree).process(processor);
 
+        KStreamTestDriver driver = new KStreamTestDriver(builder);
         for (int i = 0; i < expectedKeys.length; i++) {
-            ((KStreamSource<Integer, String>) stream).source().process(expectedKeys[i], "V" + expectedKeys[i]);
+            driver.process(topicName, expectedKeys[i], "V" + expectedKeys[i]);
         }
 
         assertEquals(5, processor.processed.size());
