@@ -55,6 +55,11 @@ public class MockProcessorContext implements ProcessorContext {
     }
 
     @Override
+    public boolean joinable() {
+        return true;
+    }
+
+    @Override
     public Serializer<?> keySerializer() {
         return serializer;
     }
