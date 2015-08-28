@@ -17,31 +17,12 @@
 
 package org.apache.kafka.test;
 
+import org.apache.kafka.streaming.processor.TimestampExtractor;
 
-import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.streaming.processor.internals.SourceNode;
-
-import java.util.ArrayList;
-import java.util.concurrent.atomic.AtomicInteger;
-
-public class MockSourceNode<K, V> extends SourceNode<K, V> {
-
-    public static final String NAME = "MOCK-SOURCE-";
-
-    public static final AtomicInteger INDEX = new AtomicInteger(1);
-
-    public int numReceived = 0;
-    public ArrayList<K> keys = new ArrayList<>();
-    public ArrayList<V> values = new ArrayList<>();
-
-    public MockSourceNode(Deserializer<K> keyDeserializer, Deserializer<V> valDeserializer) {
-        super(NAME + INDEX.getAndIncrement(), keyDeserializer, valDeserializer);
-    }
+public class MockTimestampExtractor implements TimestampExtractor {
 
     @Override
-    public void process(K key, V value) {
-        this.numReceived++;
-        this.keys.add(key);
-        this.values.add(value);
+    public long extract(String topic, Object key, Object value) {
+        return ((Integer) key).longValue();
     }
 }

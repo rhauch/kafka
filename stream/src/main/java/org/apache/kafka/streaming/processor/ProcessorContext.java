@@ -25,9 +25,6 @@ import java.io.File;
 
 public interface ProcessorContext {
 
-    // TODO: this is better moved to a KStreamContext
-    boolean joinable();
-
     /**
      * Returns the partition group id
      *
@@ -76,6 +73,11 @@ public interface ProcessorContext {
      * @return Metrics
      */
     Metrics metrics();
+
+    /**
+     * Check if this process's incoming streams are joinable
+     */
+    boolean joinable();
 
     /**
      * Registers and possibly restores the specified storage engine.

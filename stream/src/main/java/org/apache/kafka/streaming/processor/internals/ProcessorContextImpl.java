@@ -79,7 +79,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         File stateFile = new File(config.getString(StreamingConfig.STATE_DIR_CONFIG), Integer.toString(id));
 
         Consumer restoreConsumer = new KafkaConsumer<>(
-            config.getConsumerProperties(),
+            config.getConsumerConfigs(),
             null /* no callback for restore consumer */,
             new ByteArrayDeserializer(),
             new ByteArrayDeserializer());
@@ -95,6 +95,10 @@ public class ProcessorContextImpl implements ProcessorContext {
 
     public RecordCollector recordCollector() {
         return this.collector;
+    }
+
+    public StreamTask task() {
+        return this.task;
     }
 
     @Override
@@ -169,6 +173,7 @@ public class ProcessorContextImpl implements ProcessorContext {
         stateMgr.register(store, restoreFunc);
     }
 
+    @Override
     public StateStore getStateStore(String name) {
         return stateMgr.getStore(name);
     }

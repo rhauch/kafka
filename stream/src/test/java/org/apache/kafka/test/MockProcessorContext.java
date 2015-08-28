@@ -50,15 +50,13 @@ public class MockProcessorContext implements ProcessorContext {
         this.timestamp = timestamp;
     }
 
-    @Override
-    public boolean joinable() {
-        // TODO
-        return true;
+    public int id() {
+        return -1;
     }
 
     @Override
-    public int id() {
-        return -1;
+    public boolean joinable() {
+        return true;
     }
 
     @Override

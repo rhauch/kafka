@@ -105,8 +105,8 @@ public class StreamTask {
 
         // create the record recordCollector that maintains the produced offsets
         this.recordCollector = new RecordCollector(producer,
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_DESERIALIZER_CLASS_CONFIG, Serializer.class),
-            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_DESERIALIZER_CLASS_CONFIG, Serializer.class));
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class),
+            (Serializer<Object>) config.getConfiguredInstance(StreamingConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class));
 
         // initialize the topology with its own context
         try {
@@ -156,7 +156,7 @@ public class StreamTask {
 
         // if after adding these records, its partition queue's buffered size has been
         // increased beyond the threshold, we can then pause the consumption for this partition
-        if (partitionGroup.numbuffered(partition) == this.maxBufferedSize) {
+        if (partitionGroup.numbuffered(partition) > this.maxBufferedSize) {
             consumer.pause(partition);
         }
     }
