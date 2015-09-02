@@ -17,8 +17,10 @@
 
 package org.apache.kafka.streaming.state;
 
-import org.apache.kafka.streaming.processor.ProcessorContext;
-import org.apache.kafka.streaming.processor.RestoreFunc;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.MeasurableStat;
@@ -31,12 +33,10 @@ import org.apache.kafka.common.metrics.stats.Rate;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streaming.processor.ProcessorContext;
+import org.apache.kafka.streaming.processor.RestoreFunc;
 import org.apache.kafka.streaming.processor.internals.ProcessorContextImpl;
 import org.apache.kafka.streaming.processor.internals.RecordCollector;
-
-import java.util.HashSet;
-import java.util.List;
-import java.util.Set;
 
 public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
@@ -66,6 +66,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         this.time = time;
         this.group = group;
+        this.metrics = context.metrics();
+        this.topic = name;
+        this.partition = context.id();
+        this.context = context;
+        
         this.putTime = createSensor(name, "put");
         this.getTime = createSensor(name, "get");
         this.deleteTime = createSensor(name, "delete");
@@ -74,12 +79,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.rangeTime = createSensor(name, "range");
         this.flushTime = createSensor(name, "flush");
         this.restoreTime = createSensor(name, "restore");
-        this.metrics = context.metrics();
-
-        this.topic = name;
-        this.partition = context.id();
-
-        this.context = context;
 
         this.dirty = new HashSet<K>();
         this.maxDirty = 100;        // TODO: this needs to be configurable
