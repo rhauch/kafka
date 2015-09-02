@@ -35,3 +35,11 @@ results
 tests/results
 .ducktape
 tests/.ducktape
+
+.metadata/
+examples/bin
+log4j-appender/bin/
+stream/bin/
+tools/bin/
+clients/bin/
+

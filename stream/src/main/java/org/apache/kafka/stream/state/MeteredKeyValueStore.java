@@ -65,6 +65,11 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
 
         this.time = time;
         this.group = group;
+        this.metrics = context.metrics();
+        this.topic = name;
+        this.partition = context.id();
+        this.context = context;
+
         this.putTime = createSensor(name, "put");
         this.getTime = createSensor(name, "get");
         this.deleteTime = createSensor(name, "delete");
@@ -73,12 +78,6 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         this.rangeTime = createSensor(name, "range");
         this.flushTime = createSensor(name, "flush");
         this.restoreTime = createSensor(name, "restore");
-        this.metrics = context.metrics();
-
-        this.topic = name;
-        this.partition = context.id();
-
-        this.context = context;
 
         this.dirty = new HashSet<K>();
         this.maxDirty = 100;        // TODO: this needs to be configurable
@@ -86,8 +85,8 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
         // register and possibly restore the state from the logs
         long startNs = time.nanoseconds();
         try {
-            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keySerializer();
-            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueSerializer();
+            final Deserializer<K> keyDeserializer = (Deserializer<K>) context.keyDeserializer();
+            final Deserializer<V> valDeserializer = (Deserializer<V>) context.valueDeserializer();
 
             context.register(this, new RestoreFunc() {
                 @Override
