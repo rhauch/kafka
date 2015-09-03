@@ -48,10 +48,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class StreamThread extends Thread {
 
     private static final Logger log = LoggerFactory.getLogger(StreamThread.class);
+    private static AtomicInteger nextThreadNumber = new AtomicInteger(1);
 
     private final AtomicBoolean running;
 
@@ -88,7 +90,7 @@ public class StreamThread extends Thread {
 
     @SuppressWarnings("unchecked")
     public StreamThread(TopologyBuilder builder, StreamingConfig config) throws Exception {
-        super();
+        super("StreamThread-" + nextThreadNumber.getAndIncrement());
 
         this.config = config;
         this.builder = builder;
@@ -128,11 +130,11 @@ public class StreamThread extends Thread {
      */
     @Override
     public void run() {
-        log.info("Starting a stream thread");
+        log.info("Starting a stream thread [" + this.getName() + "]");
         try {
             runLoop();
         } catch (RuntimeException e) {
-            log.error("Uncaught error during processing: ", e);
+            log.error("Uncaught error during processing in thread [" + this.getName() + "]: ", e);
             throw e;
         } finally {
             shutdown();
@@ -147,13 +149,32 @@ public class StreamThread extends Thread {
     }
 
     private void shutdown() {
-        log.info("Shutting down a stream thread");
-        commitAll(time.milliseconds());
+        log.info("Shutting down a stream thread [" + this.getName() + "]");
 
-        producer.close();
-        consumer.close();
-        removePartitions();
-        log.info("Stream thread shutdown complete");
+        // Exceptions should not prevent this call from going through all shutdown steps.
+
+        try {
+            commitAll(time.milliseconds());
+        } catch (Throwable e) {
+            // already logged in commitAll()
+        }
+        try {
+            producer.close();
+        } catch (Throwable e) {
+            log.error("Failed to close producer in thread [" + this.getName() + "]: ", e);
+        }
+        try {
+            consumer.close();
+        } catch (Throwable e) {
+            log.error("Failed to close consumer in thread [" + this.getName() + "]: ", e);
+        }
+        try {
+            removePartitions();
+        } catch (Throwable e) {
+            // already logged in removePartition()
+        }
+
+        log.info("Stream thread shutdown complete [" + this.getName() + "]");
     }
 
     private void runLoop() {
@@ -218,7 +239,12 @@ public class StreamThread extends Thread {
      */
     private void commitAll(long now) {
         for (StreamTask task : tasks.values()) {
-            task.commit();
+            try {
+                task.commit();
+            } catch (Exception e) {
+                log.error("Failed to commit task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                throw e;
+            }
         }
 
         metrics.commitTime.record(now - time.milliseconds());
@@ -238,7 +264,7 @@ public class StreamThread extends Thread {
                 for (File dir : stateDirs) {
                     try {
                         Integer id = Integer.parseInt(dir.getName());
-                        if (!tasks.keySet().contains(id)) {
+                        if (!tasks.containsKey(id)) {
                             log.info("Deleting obsolete state directory {} after delayed {} ms.", dir.getAbsolutePath(), cleanTimeMs);
                             Utils.rm(dir);
                         }
@@ -268,8 +294,12 @@ public class StreamThread extends Thread {
                         partitionsForTask.add(part);
 
                 // create the task
-                task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
-
+                try {
+                    task = new StreamTask(id, consumer, producer, partitionsForTask, builder.build(), config);
+                } catch (Exception e) {
+                    log.error("Failed to create a task #" + id + " in thread [" + this.getName() + "]: ", e);
+                    throw e;
+                }
                 tasks.put(id, task);
             }
         }
@@ -285,7 +315,8 @@ public class StreamThread extends Thread {
             try {
                 task.close();
             } catch (Exception e) {
-                throw new KafkaException(e);
+                log.error("Failed to close a task #" + task.id() + " in thread [" + this.getName() + "]: ", e);
+                throw e;
             }
             metrics.processorDestruction.record();
         }
