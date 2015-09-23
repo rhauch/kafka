@@ -17,11 +17,12 @@
 
 package org.apache.kafka.streams.state;
 
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.SystemTime;
-
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.processor.ProcessorContext;
 import org.rocksdb.BlockBasedTableConfig;
 import org.rocksdb.CompactionStyle;
 import org.rocksdb.CompressionType;
@@ -37,17 +38,27 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 
-public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
+/**
+ * A {@link KeyValueStore} that stores all entries in a local RocksDB database.
+ *
+ * @param <K> the type of keys
+ * @param <V> the type of values
+ */
+public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
 
-    public RocksDBKeyValueStore(String name, ProcessorContext context) {
-        this(name, context, new SystemTime());
+    public RocksDBKeyValueStore(String name, ProcessorContext context,
+                                Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                                Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
+        this(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, new SystemTime());
     }
 
-    public RocksDBKeyValueStore(String name, ProcessorContext context, Time time) {
-        super(name, new RocksDBStore(name, context), context, "kafka-streams", time);
+    public RocksDBKeyValueStore(String name, ProcessorContext context,
+                                Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                                Serializer<V> valueSerializer, Deserializer<V> valueDeserializer, Time time) {
+        super(name, new RocksDBStore<K,V>(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer), context, "kafka-streams", time);
     }
 
-    private static class RocksDBStore implements KeyValueStore<byte[], byte[]> {
+    private static class RocksDBStore<K,V> implements KeyValueStore<K,V> {
 
         private static final int TTL_NOT_USED = -1;
 
@@ -60,6 +71,11 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private static final CompressionType COMPRESSION_TYPE = CompressionType.NO_COMPRESSION;
         private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
         private static final String DB_FILE_DIR = "rocksdb";
+
+        private final Serializer<K> keySerializer;
+        private final Serializer<V> valueSerializer;
+        private final Deserializer<K> keyDeserializer;
+        private final Deserializer<V> valueDeserializer;
 
         private final String topic;
         private final int partition;
@@ -75,10 +91,15 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         private RocksDB db;
 
         @SuppressWarnings("unchecked")
-        public RocksDBStore(String name, ProcessorContext context) {
+        public RocksDBStore(String name, ProcessorContext context, Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                            Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
             this.topic = name;
             this.partition = context.id();
             this.context = context;
+            this.keySerializer = keySerializer != null ? keySerializer : (Serializer<K>)context.keySerializer();
+            this.keyDeserializer = keyDeserializer != null ? keyDeserializer : (Deserializer<K>)context.keyDeserializer();
+            this.valueSerializer = valueSerializer != null ? valueSerializer : (Serializer<V>)context.valueSerializer();
+            this.valueDeserializer = valueDeserializer != null ? valueDeserializer : (Deserializer<V>)context.valueDeserializer();
 
             // initialize the rocksdb options
             BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -130,24 +151,24 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         public boolean persistent() {
             return false;
         }
-
+        
         @Override
-        public byte[] get(byte[] key) {
+        public V get(K key) {
             try {
-                return this.db.get(key);
+                return valueFrom(this.db.get(rawKey(key)));
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
                 throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.topic, e);
             }
         }
-
+        
         @Override
-        public void put(byte[] key, byte[] value) {
+        public void put(K key, V value) {
             try {
                 if (value == null) {
-                    db.remove(wOptions, key);
+                    db.remove(wOptions, rawKey(key));
                 } else {
-                    db.put(wOptions, key, value);
+                    db.put(wOptions, rawKey(key), rawValue(value));
                 }
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
@@ -156,28 +177,28 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
         }
 
         @Override
-        public void putAll(List<Entry<byte[], byte[]>> entries) {
-            for (Entry<byte[], byte[]> entry : entries)
+        public void putAll(List<Entry<K, V>> entries) {
+            for (Entry<K,V> entry : entries)
                 put(entry.key(), entry.value());
         }
-
+        
         @Override
-        public byte[] delete(byte[] key) {
-            byte[] value = get(key);
+        public V delete(K key) {
+            V value = get(key);
             put(key, null);
             return value;
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> range(byte[] from, byte[] to) {
-            return new RocksDBRangeIterator(db.newIterator(), from, to);
+        public KeyValueIterator<K, V> range(K from, K to) {
+            return new RocksDBRangeIterator<K,V>(db.newIterator(), topic, keySerializer , keyDeserializer, valueDeserializer, from, to);
         }
 
         @Override
-        public KeyValueIterator<byte[], byte[]> all() {
+        public KeyValueIterator<K, V> all() {
             RocksIterator innerIter = db.newIterator();
             innerIter.seekToFirst();
-            return new RocksDbIterator(innerIter);
+            return new RocksDbIterator<K, V>(innerIter, topic, keyDeserializer, valueDeserializer);
         }
 
         @Override
@@ -196,19 +217,46 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             db.close();
         }
 
-        private static class RocksDbIterator implements KeyValueIterator<byte[], byte[]> {
-            private final RocksIterator iter;
+        protected final V valueFrom( byte[] rawValue ) {
+            return valueDeserializer.deserialize(topic, rawValue);
+        }
 
-            public RocksDbIterator(RocksIterator iter) {
+        protected final byte[] rawKey( K key ) {
+            return keySerializer.serialize(topic, key);
+        }
+
+        protected final byte[] rawValue( V value ) {
+            return valueSerializer.serialize(topic, value);
+        }
+        
+        private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
+            private final RocksIterator iter;
+            private final String topic;
+            private final Deserializer<K> keyDeserializer;
+            private final Deserializer<V> valueDeserializer;
+
+            public RocksDbIterator(RocksIterator iter, String topic,
+                                   Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
                 this.iter = iter;
+                this.topic = topic;
+                this.keyDeserializer = keyDeserializer;
+                this.valueDeserializer = valueDeserializer;
             }
 
             protected byte[] peekKey() {
-                return this.getEntry().key();
+                return iter.key();
+            }
+            
+            protected final K keyFrom( byte[] rawKey ) {
+                return keyDeserializer.deserialize(topic, rawKey);
             }
 
-            protected Entry<byte[], byte[]> getEntry() {
-                return new Entry<>(iter.key(), iter.value());
+            protected final V valueFrom( byte[] rawValue ) {
+                return valueDeserializer.deserialize(topic, rawValue);
+            }
+
+            protected Entry<K, V> getEntry() {
+                return new Entry<>(keyFrom(iter.key()),valueFrom(iter.value()));
             }
 
             @Override
@@ -217,13 +265,12 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             }
 
             @Override
-            public Entry<byte[], byte[]> next() {
+            public Entry<K, V> next() {
                 if (!hasNext())
                     throw new NoSuchElementException();
 
-                Entry<byte[], byte[]> entry = this.getEntry();
+                Entry<K, V> entry = this.getEntry();
                 iter.next();
-
                 return entry;
             }
 
@@ -253,17 +300,20 @@ public class RocksDBKeyValueStore extends MeteredKeyValueStore<byte[], byte[]> {
             }
         }
 
-        private static class RocksDBRangeIterator extends RocksDbIterator {
+        private static class RocksDBRangeIterator<K,V> extends RocksDbIterator<K,V> {
             // RocksDB's JNI interface does not expose getters/setters that allow the
             // comparator to be pluggable, and the default is lexicographic, so it's
             // safe to just force lexicographic comparator here for now.
             private final Comparator<byte[]> comparator = new LexicographicComparator();
             byte[] to;
 
-            public RocksDBRangeIterator(RocksIterator iter, byte[] from, byte[] to) {
-                super(iter);
-                iter.seek(from);
-                this.to = to;
+            public RocksDBRangeIterator(RocksIterator iter, String topic,
+                                        Serializer<K> keySerializer,  Deserializer<K> keyDeserializer,
+                                        Deserializer<V> valueDeserializer,
+                                        K from, K to) {
+                super(iter,topic,keyDeserializer,valueDeserializer);
+                iter.seek(keySerializer.serialize(topic, from));
+                this.to = keySerializer.serialize(topic, to);
             }
 
             @Override
