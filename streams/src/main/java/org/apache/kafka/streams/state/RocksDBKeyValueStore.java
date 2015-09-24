@@ -44,21 +44,123 @@ import java.util.NoSuchElementException;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
+public class RocksDBKeyValueStore<K, V> extends MeteredKeyValueStore<K, V> {
 
-    public RocksDBKeyValueStore(String name, ProcessorContext context,
-                                Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                                Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
-        this(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, new SystemTime());
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage and the system time
+     * provider.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @param keyClass the class for the keys, which must be one of the types for which Kafka has built-in serializers and
+     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
+     *            {@code byte[].class})
+     * @param valueClass the class for the values, which must be one of the types for which Kafka has built-in serializers and
+     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
+     *            {@code byte[].class})
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Class<K> keyClass, Class<V> valueClass) {
+        return new RocksDBKeyValueStore<>(name, context, Serdes.withBuiltinTypes(name, keyClass, valueClass),
+                new SystemTime());
     }
 
-    public RocksDBKeyValueStore(String name, ProcessorContext context,
-                                Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                                Serializer<V> valueSerializer, Deserializer<V> valueDeserializer, Time time) {
-        super(name, new RocksDBStore<K,V>(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer), context, "kafka-streams", time);
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage and the given time
+     * provider.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @param keyClass the class for the keys, which must be one of the types for which Kafka has built-in serializers and
+     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
+     *            {@code byte[].class})
+     * @param valueClass the class for the values, which must be one of the types for which Kafka has built-in serializers and
+     *            deserializers (e.g., {@code String.class}, {@code Integer.class}, {@code Long.class}, or
+     *            {@code byte[].class})
+     * @param time the time provider; may not be null
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Class<K> keyClass, Class<V> valueClass,
+                                                           Time time) {
+        return new RocksDBKeyValueStore<>(name, context, Serdes.withBuiltinTypes(name, keyClass, valueClass),
+                time);
     }
 
-    private static class RocksDBStore<K,V> implements KeyValueStore<K,V> {
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
+     * {@link ProcessorContext}'s default serializers and deserializers, and the system time provider.
+     * <p>
+     * <strong>NOTE:</strong> the default serializers and deserializers in the context <em>must</em> match the key and value types
+     * used as parameters for this key value store.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context) {
+        return create(name, context, new SystemTime());
+    }
+
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
+     * {@link ProcessorContext}'s default serializers and deserializers, and the given time provider.
+     * <p>
+     * <strong>NOTE:</strong> the default serializers and deserializers in the context <em>must</em> match the key and value types
+     * used as parameters for this key value store.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @param time the time provider; may not be null
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context, Time time) {
+        return new RocksDBKeyValueStore<>(name, context, new Serdes<K, V>(name, context), time);
+    }
+
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
+     * supplied serializers and deserializers, and the system time provider.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @param keySerializer the serializer for keys; may not be null
+     * @param keyDeserializer the deserializer for keys; may not be null
+     * @param valueSerializer the serializer for values; may not be null
+     * @param valueDeserializer the deserializer for values; may not be null
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context,
+                                                           Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                                                           Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
+        return create(name, context, keySerializer, keyDeserializer, valueSerializer, valueDeserializer, new SystemTime());
+    }
+
+    /**
+     * Create a key value store that records changes to a Kafka topic and that uses RocksDB for local storage, the
+     * supplied serializers and deserializers, and the given time provider.
+     * 
+     * @param name the name of the store, used in the name of the topic to which entries are recorded
+     * @param context the processing context
+     * @param keySerializer the serializer for keys; may not be null
+     * @param keyDeserializer the deserializer for keys; may not be null
+     * @param valueSerializer the serializer for values; may not be null
+     * @param valueDeserializer the deserializer for values; may not be null
+     * @param time the time provider; may not be null
+     * @return the key-value store
+     */
+    public static <K, V> RocksDBKeyValueStore<K, V> create(String name, ProcessorContext context,
+                                                           Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
+                                                           Serializer<V> valueSerializer, Deserializer<V> valueDeserializer,
+                                                           Time time) {
+        Serdes<K, V> serdes = new Serdes<>(name, keySerializer, keyDeserializer, valueSerializer, valueDeserializer);
+        return new RocksDBKeyValueStore<>(name, context, serdes, time);
+    }
+
+    protected RocksDBKeyValueStore(String name, ProcessorContext context, Serdes<K, V> serdes, Time time) {
+        super(name, new RocksDBStore<K, V>(name, context, serdes), context, serdes, "kafka-streams", time);
+    }
+
+    private static class RocksDBStore<K, V> implements KeyValueStore<K, V> {
 
         private static final int TTL_NOT_USED = -1;
 
@@ -72,10 +174,7 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
         private static final CompactionStyle COMPACTION_STYLE = CompactionStyle.UNIVERSAL;
         private static final String DB_FILE_DIR = "rocksdb";
 
-        private final Serializer<K> keySerializer;
-        private final Serializer<V> valueSerializer;
-        private final Deserializer<K> keyDeserializer;
-        private final Deserializer<V> valueDeserializer;
+        private final Serdes<K, V> serdes;
 
         private final String topic;
         private final int partition;
@@ -90,16 +189,11 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
 
         private RocksDB db;
 
-        @SuppressWarnings("unchecked")
-        public RocksDBStore(String name, ProcessorContext context, Serializer<K> keySerializer, Deserializer<K> keyDeserializer,
-                            Serializer<V> valueSerializer, Deserializer<V> valueDeserializer) {
+        public RocksDBStore(String name, ProcessorContext context, Serdes<K, V> serdes) {
             this.topic = name;
             this.partition = context.id();
             this.context = context;
-            this.keySerializer = keySerializer != null ? keySerializer : (Serializer<K>)context.keySerializer();
-            this.keyDeserializer = keyDeserializer != null ? keyDeserializer : (Deserializer<K>)context.keyDeserializer();
-            this.valueSerializer = valueSerializer != null ? valueSerializer : (Serializer<V>)context.valueSerializer();
-            this.valueDeserializer = valueDeserializer != null ? valueDeserializer : (Deserializer<V>)context.valueDeserializer();
+            this.serdes = serdes;
 
             // initialize the rocksdb options
             BlockBasedTableConfig tableConfig = new BlockBasedTableConfig();
@@ -151,24 +245,24 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
         public boolean persistent() {
             return false;
         }
-        
+
         @Override
         public V get(K key) {
             try {
-                return valueFrom(this.db.get(rawKey(key)));
+                return serdes.valueFrom(this.db.get(serdes.rawKey(key)));
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
                 throw new KafkaException("Error while executing get " + key.toString() + " from store " + this.topic, e);
             }
         }
-        
+
         @Override
         public void put(K key, V value) {
             try {
                 if (value == null) {
-                    db.remove(wOptions, rawKey(key));
+                    db.remove(wOptions, serdes.rawKey(key));
                 } else {
-                    db.put(wOptions, rawKey(key), rawValue(value));
+                    db.put(wOptions, serdes.rawKey(key), serdes.rawValue(value));
                 }
             } catch (RocksDBException e) {
                 // TODO: this needs to be handled more accurately
@@ -178,7 +272,7 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
 
         @Override
         public void putAll(List<Entry<K, V>> entries) {
-            for (Entry<K,V> entry : entries)
+            for (Entry<K, V> entry : entries)
                 put(entry.key(), entry.value());
         }
         
@@ -191,14 +285,14 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
 
         @Override
         public KeyValueIterator<K, V> range(K from, K to) {
-            return new RocksDBRangeIterator<K,V>(db.newIterator(), topic, keySerializer , keyDeserializer, valueDeserializer, from, to);
+            return new RocksDBRangeIterator<K, V>(db.newIterator(), serdes, from, to);
         }
 
         @Override
         public KeyValueIterator<K, V> all() {
             RocksIterator innerIter = db.newIterator();
             innerIter.seekToFirst();
-            return new RocksDbIterator<K, V>(innerIter, topic, keyDeserializer, valueDeserializer);
+            return new RocksDbIterator<K, V>(innerIter, serdes);
         }
 
         @Override
@@ -217,46 +311,21 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
             db.close();
         }
 
-        protected final V valueFrom( byte[] rawValue ) {
-            return valueDeserializer.deserialize(topic, rawValue);
-        }
-
-        protected final byte[] rawKey( K key ) {
-            return keySerializer.serialize(topic, key);
-        }
-
-        protected final byte[] rawValue( V value ) {
-            return valueSerializer.serialize(topic, value);
-        }
-        
         private static class RocksDbIterator<K, V> implements KeyValueIterator<K, V> {
             private final RocksIterator iter;
-            private final String topic;
-            private final Deserializer<K> keyDeserializer;
-            private final Deserializer<V> valueDeserializer;
+            private final Serdes<K, V> serdes;
 
-            public RocksDbIterator(RocksIterator iter, String topic,
-                                   Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
+            public RocksDbIterator(RocksIterator iter, Serdes<K, V> serdes) {
                 this.iter = iter;
-                this.topic = topic;
-                this.keyDeserializer = keyDeserializer;
-                this.valueDeserializer = valueDeserializer;
+                this.serdes = serdes;
             }
 
-            protected byte[] peekKey() {
+            protected byte[] peekRawKey() {
                 return iter.key();
-            }
-            
-            protected final K keyFrom( byte[] rawKey ) {
-                return keyDeserializer.deserialize(topic, rawKey);
-            }
-
-            protected final V valueFrom( byte[] rawValue ) {
-                return valueDeserializer.deserialize(topic, rawValue);
             }
 
             protected Entry<K, V> getEntry() {
-                return new Entry<>(keyFrom(iter.key()),valueFrom(iter.value()));
+                return new Entry<>(serdes.keyFrom(iter.key()), serdes.valueFrom(iter.value()));
             }
 
             @Override
@@ -300,25 +369,23 @@ public class RocksDBKeyValueStore<K,V> extends MeteredKeyValueStore<K,V> {
             }
         }
 
-        private static class RocksDBRangeIterator<K,V> extends RocksDbIterator<K,V> {
+        private static class RocksDBRangeIterator<K, V> extends RocksDbIterator<K, V> {
             // RocksDB's JNI interface does not expose getters/setters that allow the
             // comparator to be pluggable, and the default is lexicographic, so it's
             // safe to just force lexicographic comparator here for now.
             private final Comparator<byte[]> comparator = new LexicographicComparator();
             byte[] to;
 
-            public RocksDBRangeIterator(RocksIterator iter, String topic,
-                                        Serializer<K> keySerializer,  Deserializer<K> keyDeserializer,
-                                        Deserializer<V> valueDeserializer,
-                                        K from, K to) {
-                super(iter,topic,keyDeserializer,valueDeserializer);
-                iter.seek(keySerializer.serialize(topic, from));
-                this.to = keySerializer.serialize(topic, to);
+            public RocksDBRangeIterator(RocksIterator iter, Serdes<K, V> serdes,
+                    K from, K to) {
+                super(iter, serdes);
+                iter.seek(serdes.rawKey(from));
+                this.to = serdes.rawKey(to);
             }
 
             @Override
             public boolean hasNext() {
-                return super.hasNext() && comparator.compare(super.peekKey(), this.to) < 0;
+                return super.hasNext() && comparator.compare(super.peekRawKey(), this.to) < 0;
             }
         }
 
