@@ -218,7 +218,7 @@ public class MeteredKeyValueStore<K, V> implements KeyValueStore<K, V> {
     }
 
     private void logChange() {
-        RecordCollector collector = ((ProcessorContextImpl) context).recordCollector();
+        RecordCollector collector = ((RecordCollector.Supplier) context).recordCollector();
         if (collector != null) {
             Serializer<K> keySerializer = serialization.keySerializer();
             Serializer<V> valueSerializer = serialization.valueSerializer();
