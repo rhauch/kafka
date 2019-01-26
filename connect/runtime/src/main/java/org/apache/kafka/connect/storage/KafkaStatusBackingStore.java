@@ -159,7 +159,7 @@ public class KafkaStatusBackingStore implements StatusBackingStore {
             public void run() {
                 log.debug("Creating admin client to manage Connect internal status topic");
                 try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    admin.createTopics(topicDescription);
+                    admin.createTopic(topicDescription);
                 }
             }
         };

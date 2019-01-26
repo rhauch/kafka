@@ -491,6 +491,8 @@ public class Worker {
 
         // Decide which type of worker task we need based on the type of task.
         if (task instanceof SourceTask) {
+            // TODO: create topic factory with connector props and pass to WorkerSourceTask
+
             retryWithToleranceOperator.reporters(sourceTaskReporters(id, connConfig, errorHandlingMetrics));
             TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(connConfig.<SourceRecord>transformations(), retryWithToleranceOperator);
             OffsetStorageReader offsetReader = new OffsetStorageReaderImpl(offsetBackingStore, id.connector(),

@@ -439,7 +439,7 @@ public class KafkaConfigBackingStore implements ConfigBackingStore {
             public void run() {
                 log.debug("Creating admin client to manage Connect internal config topic");
                 try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    admin.createTopics(topicDescription);
+                    admin.createTopic(topicDescription);
                 }
             }
         };

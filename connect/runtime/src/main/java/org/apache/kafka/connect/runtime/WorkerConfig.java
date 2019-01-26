@@ -213,6 +213,11 @@ public class WorkerConfig extends AbstractConfig {
     public static final String METRICS_RECORDING_LEVEL_CONFIG = CommonClientConfigs.METRICS_RECORDING_LEVEL_CONFIG;
     public static final String METRIC_REPORTER_CLASSES_CONFIG = CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG;
 
+    public static final String TOPIC_CREATION_ENABLE_CONFIG = "topic.creation.enable";
+    private static final boolean TOPIC_CREATION_ENABLE_DEFAULT = false;
+    private static final String TOPIC_CREATION_ENABLE_DOC = "Whether to allow source connector configurations to configure topic creation. " +
+        "The default is 'false', requiring the configuration to explicitly enable the feature.";
+
     /**
      * Get a basic ConfigDef for a WorkerConfig. This includes all the common settings. Subclasses can use this to
      * bootstrap their own ConfigDef.
@@ -277,7 +282,9 @@ public class WorkerConfig extends AbstractConfig {
                         Collections.emptyList(),
                         Importance.LOW, CONFIG_PROVIDERS_DOC)
                 .define(REST_EXTENSION_CLASSES_CONFIG, Type.LIST, "",
-                        Importance.LOW, REST_EXTENSION_CLASSES_DOC);
+                        Importance.LOW, REST_EXTENSION_CLASSES_DOC)
+                .define(TOPIC_CREATION_ENABLE_CONFIG, Type.BOOLEAN, TOPIC_CREATION_ENABLE_DEFAULT,
+                        Importance.MEDIUM, TOPIC_CREATION_ENABLE_DOC);
     }
 
     private void logInternalConverterDeprecationWarnings(Map<String, String> props) {

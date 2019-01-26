@@ -286,6 +286,9 @@ class WorkerSourceTask extends WorkerTask {
         int processed = 0;
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter = new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup);
+
+        createMissingTopics(toSend);
+
         for (final SourceRecord preTransformRecord : toSend) {
 
             retryWithToleranceOperator.sourceRecord(preTransformRecord);
@@ -353,6 +356,10 @@ class WorkerSourceTask extends WorkerTask {
         }
         toSend = null;
         return true;
+    }
+
+    private void createMissingTopics(List<SourceRecord> records) {
+        if ()
     }
 
     private RecordHeaders convertHeaderFor(SourceRecord record) {

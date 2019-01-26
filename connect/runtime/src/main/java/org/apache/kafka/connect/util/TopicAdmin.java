@@ -19,9 +19,12 @@ package org.apache.kafka.connect.util;
 import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsOptions;
+import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
+import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -30,12 +33,19 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
+import java.util.stream.Collectors;
 
 /**
  * Utility to simplify creating and managing topics via the {@link org.apache.kafka.clients.admin.AdminClient}.
@@ -186,7 +196,7 @@ public class TopicAdmin implements AutoCloseable {
      */
     public boolean createTopic(NewTopic topic) {
         if (topic == null) return false;
-        Set<String> newTopicNames = createTopics(topic);
+        Set<String> newTopicNames = createTopics(Collections.singleton(topic));
         return newTopicNames.contains(topic.name());
     }
 
@@ -194,8 +204,6 @@ public class TopicAdmin implements AutoCloseable {
      * Attempt to create the topics described by the given definitions, returning all of the names of those topics that
      * were created by this request. Any existing topics with the same name are unchanged, and the names of such topics
      * are excluded from the result.
-     * <p>
-     * If multiple topic definitions have the same topic name, the last one with that name will be used.
      * <p>
      * Apache Kafka added support for creating topics in 0.10.1.0, so this method works as expected with that and later versions.
      * With brokers older than 0.10.1.0, this method is unable to create topics and always returns an empty set.
@@ -205,57 +213,63 @@ public class TopicAdmin implements AutoCloseable {
      * @throws ConnectException            if an error occurs, the operation takes too long, or the thread is interrupted while
      *                                     attempting to perform this operation
      */
-    public Set<String> createTopics(NewTopic... topics) {
-        Map<String, NewTopic> topicsByName = new HashMap<>();
-        if (topics != null) {
-            for (NewTopic topic : topics) {
-                if (topic != null) topicsByName.put(topic.name(), topic);
-            }
-        }
+    public Set<String> createTopics(Collection<NewTopic> topics) {
+        return createTopics(topics, new CreateTopicResponseHandler());
+    }
+
+    /**
+     * Attempt to create the topics described by the given definitions, returning all of the names of those topics that
+     * were created by this request. Any existing topics with the same name are unchanged, and the names of such topics
+     * are excluded from the result.
+     * <p>
+     * Apache Kafka added support for creating topics in 0.10.1.0, so this method works as expected with that and later versions.
+     * With brokers older than 0.10.1.0, this method is unable to create topics and always returns an empty set.
+     * <p>
+     * The response handler will be called after a topic is created or with any errors that result from attempting to create a topic.
+     * The handler is responsible for logging any errors and/or throwing any exceptions, which are not caught by this method. For example,
+     * many handlers will wrap {@link TimeoutException} and unknown {@link Throwable} errors in a {@link ConnectException}.
+     *
+     * @param topics the specifications of the topics; may not be null
+     * @param handler the handler for successes and failures; may not be null
+     * @return the names of the topics that were created by this operation; never null but possibly empty
+     * @throws ConnectException            if an error occurs, the operation takes too long, or the thread is interrupted while
+     *                                     attempting to perform this operation
+     */
+    public Set<String> createTopics(Collection<NewTopic> topics, CreateTopicResponseHandler handler) {
+        final LinkedHashMap<String, NewTopic> topicsByName = new LinkedHashMap<>();
+        topics.stream().forEach(newTopic -> topicsByName.put(newTopic.name(), newTopic));
+
         if (topicsByName.isEmpty()) return Collections.emptySet();
-        String bootstrapServers = bootstrapServers();
-        String topicNameList = Utils.join(topicsByName.keySet(), "', '");
 
         // Attempt to create any missing topics
         CreateTopicsOptions args = new CreateTopicsOptions().validateOnly(false);
         Map<String, KafkaFuture<Void>> newResults = admin.createTopics(topicsByName.values(), args).values();
 
         // Iterate over each future so that we can handle individual failures like when some topics already exist
+        Topics newTopics = new Topics(topicsByName.keySet(), bootstrapServers());
         Set<String> newlyCreatedTopicNames = new HashSet<>();
         for (Map.Entry<String, KafkaFuture<Void>> entry : newResults.entrySet()) {
             String topic = entry.getKey();
             try {
                 entry.getValue().get();
-                log.info("Created topic {} on brokers at {}", topicsByName.get(topic), bootstrapServers);
+                handler.handleCreated(newTopics, topicsByName.get(topic));
                 newlyCreatedTopicNames.add(topic);
             } catch (ExecutionException e) {
                 Throwable cause = e.getCause();
                 if (cause instanceof TopicExistsException) {
-                    log.debug("Found existing topic '{}' on the brokers at {}", topic, bootstrapServers);
-                    continue;
+                    handler.handleExisting(newTopics, topic);
+                } else if (cause instanceof UnsupportedVersionException) {
+                    handler.handleError(newTopics, topic, (UnsupportedVersionException) cause);
+                } else if (cause instanceof ClusterAuthorizationException) {
+                    handler.handleError(newTopics, topic, (ClusterAuthorizationException) cause);
+                } else if (cause instanceof TimeoutException) {
+                    handler.handleError(newTopics, topic, (TimeoutException) cause);
+                } else {
+                    handler.handleError(newTopics, topic, cause);
                 }
-                if (cause instanceof UnsupportedVersionException) {
-                    log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API.",
-                            " Falling back to assume topic(s) exist or will be auto-created by the broker.",
-                            topicNameList, bootstrapServers);
-                    return Collections.emptySet();
-                }
-                if (cause instanceof ClusterAuthorizationException) {
-                    log.debug("Not authorized to create topic(s) '{}'." +
-                            " Falling back to assume topic(s) exist or will be auto-created by the broker.",
-                            topicNameList, bootstrapServers);
-                    return Collections.emptySet();
-                }
-                if (cause instanceof TimeoutException) {
-                    // Timed out waiting for the operation to complete
-                    throw new ConnectException("Timed out while checking for or creating topic(s) '" + topicNameList + "'." +
-                            " This could indicate a connectivity issue, unavailable topic partitions, or if" +
-                            " this is your first use of the topic it may have taken too long to create.", cause);
-                }
-                throw new ConnectException("Error while attempting to create/find topic(s) '" + topicNameList + "'", e);
             } catch (InterruptedException e) {
                 Thread.interrupted();
-                throw new ConnectException("Interrupted while attempting to create/find topic(s) '" + topicNameList + "'", e);
+                throw new ConnectException("Interrupted while attempting to create/find topic(s) " + newTopics.topicNamesAsString(), e);
             }
         }
         return newlyCreatedTopicNames;
@@ -269,5 +283,78 @@ public class TopicAdmin implements AutoCloseable {
     private String bootstrapServers() {
         Object servers = adminConfig.get(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG);
         return servers != null ? servers.toString() : "<unknown>";
+    }
+
+    public static class Topics {
+        private final List<String> topicNames;
+        private final String bootstrapServers;
+        public Topics(Collection<String> topicNames, String bootstrapServers) {
+            this.bootstrapServers = bootstrapServers;
+            this.topicNames = Collections.unmodifiableList(new ArrayList<>(topicNames));
+        }
+
+        public String bootstrapServers() {
+            return bootstrapServers;
+        }
+
+        public List<String> topicNames() {
+            return topicNames;
+        }
+
+        public String topicNamesAsString() {
+            return topicNames().stream().collect(Collectors.joining("', '","'","'"));
+        }
+
+        @Override
+        public String toString() {
+            return topicNamesAsString() + " on brokers " + bootstrapServers();
+        }
+    }
+
+    public static class CreateTopicResponseHandler {
+
+        private boolean unsupportedSeen = false;
+        private boolean unauthorizedSeen = false;
+
+        public void handleCreated(Topics topics, NewTopic topic) {
+            log.info("Created topic {} on brokers at {}", topic, topics.bootstrapServers());
+        }
+
+        public void handleExisting(Topics topics, String topicName) {
+            log.debug("Found existing topic '{}' on the brokers at {}", topicName, topics.bootstrapServers());
+        }
+
+        public void handleError(Topics topics, String topicName, UnsupportedVersionException error) {
+            if (!unsupportedSeen) {
+                unsupportedSeen = true;
+                log.trace("Unsupported version error when creating topic '{}'", topicName, error);
+                log.debug("Unable to create topic(s) '{}' since the brokers at {} do not support the CreateTopics API.",
+                          " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                          topics.topicNamesAsString(), topics.bootstrapServers());
+            }
+        }
+
+        public void handleError(Topics topics, String topicName, ClusterAuthorizationException error) {
+            if (!unauthorizedSeen) {
+                unauthorizedSeen = true;
+                log.trace("Cluster authorization failure when creating topic '{}'", topicName, error);
+                log.debug("Not authorized to create topic(s) '{}'." +
+                          " Falling back to assume topic(s) exist or will be auto-created by the broker.",
+                          topics.topicNamesAsString(), topics.bootstrapServers());
+            }
+        }
+
+        public void handleError(Topics topics, String topicName, TimeoutException error) {
+            // Timed out waiting for the operation to complete
+            String msg = String.format("Timed out while checking for or creating topic(s) {}." +
+                                       " This could indicate a connectivity issue, unavailable topic partitions, or if" +
+                                       " this is your first use of the topic it may have taken too long to create.",
+                                       topics.topicNamesAsString());
+            throw new ConnectException(msg, error);
+        }
+
+        public void handleError(Topics topics, String topicName, Throwable error) {
+            throw new ConnectException("Error while attempting to create/find topic(s) " + topics.topicNamesAsString(), error);
+        }
     }
 }

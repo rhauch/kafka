@@ -96,7 +96,7 @@ public class KafkaOffsetBackingStore implements OffsetBackingStore {
             public void run() {
                 log.debug("Creating admin client to manage Connect internal offset topic");
                 try (TopicAdmin admin = new TopicAdmin(adminProps)) {
-                    admin.createTopics(topicDescription);
+                    admin.createTopic(topicDescription);
                 }
             }
         };

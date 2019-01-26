@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.source;
 
 import org.apache.kafka.connect.connector.Task;
-import org.apache.kafka.connect.storage.TopicSettings;
 
 import java.util.List;
 import java.util.Map;
@@ -102,21 +101,5 @@ public abstract class SourceTask implements Task {
      */
     public void commitRecord(SourceRecord record) throws InterruptedException {
         // This space intentionally left blank.
-    }
-
-    /**
-     * Determine the topic-specific settings for a new topic to which the {@link SourceRecord} {@link #poll() produced by this task}
-     * are to be written. This method is called whenever a new topic is seen in the {@link SourceRecord}s, and sh
-     * <p>
-     * By default this method simply returns the supplied initial settings. Implementations can override this method
-     * to set the topic-specific settings that should be used when creating the new topic. The broker's own
-     * topic-specific configuration settings will be used as defaults for any settings not set via the resulting object.
-     * </p>
-     *
-     * @param settings the initial settings; never null
-     * @return the topic-specific settings; may be null if the broker should auto-create the topic
-     */
-    public TopicSettings settingsForNewTopic(TopicSettings settings) {
-        return null;
     }
 }
